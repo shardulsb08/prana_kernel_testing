@@ -1,0 +1,44 @@
+# Enforce LF line endings for all text files
+* text=auto
+
+# Normalize line endings for specific text file types
+*.c       text eol=lf
+*.cpp     text eol=lf
+*.h       text eol=lf
+*.sh      text eol=lf
+*.py      text eol=lf
+*.java    text eol=lf
+*.js      text eol=lf
+*.ts      text eol=lf
+*.html    text eol=lf
+*.css     text eol=lf
+*.json    text eol=lf
+*.xml     text eol=lf
+*.md      text eol=lf
+
+# Prevent Git from modifying binary files
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.ico     binary
+*.pdf     binary
+*.mp4     binary
+*.mp3     binary
+*.zip     binary
+*.tar.gz  binary
+
+# Ignore trailing whitespace on diff
+#* -diff
+
+# Handle Windows Batch files and PowerShell scripts correctly
+*.bat     text eol=crlf
+*.ps1     text eol=lf
+
+# Make shell scripts executable on Unix-like systems
+*.sh      text eol=lf diff=auto
+
+# Apply extra whitespace checks for certain files
+*.c       whitespace=trailing-space,space-before-tab
+*.h       whitespace=trailing-space,space-before-tab
+*.cpp     whitespace=trailing-space,space-before-tab
