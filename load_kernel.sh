@@ -111,7 +111,7 @@ ssh -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'REMOTE_EOF'
 set -euo pipefail
 log() { echo "[$(date +"%Y-%m-%d %H:%M:%S")] $*"; }
 
-log "Ensuring shared folder is mounted..."
+log "Ensuring shared folder is mounted at /host_out..."
 if ! mountpoint -q /host_out; then
     sudo mkdir -p /host_out
     sudo mount -t 9p -o trans=virtio host_out /host_out || { log "Error mounting shared folder"; exit 1; }
@@ -131,33 +131,36 @@ if [ -z "$KVER" ]; then
 fi
 log "Detected custom kernel version: $KVER"
 
+log "Remounting /boot as read-write..."
+sudo mount -o remount,rw /boot || { log "Failed to remount /boot as read-write"; exit 1; }
+
 log "Copying new kernel image to /boot/vmlinuz-custom..."
-sudo cp /host_out/kernel_artifacts/bzImage /boot/vmlinuz-custom
+sudo cp /host_out/kernel_artifacts/bzImage /boot/vmlinuz-custom || { log "Failed to copy kernel image"; exit 1; }
 
 log "Installing kernel modules..."
 sudo mkdir -p /lib/modules/$KVER
-sudo cp -r /host_out/kernel_artifacts/lib/modules/$KVER/* /lib/modules/$KVER/
+sudo cp -r /host_out/kernel_artifacts/lib/modules/$KVER/* /lib/modules/$KVER/ || { log "Failed to copy kernel modules"; exit 1; }
 
 log "Generating initramfs for the new kernel..."
-sudo dracut -f /boot/initramfs-custom.img $KVER
+sudo dracut -f /boot/initramfs-custom.img $KVER || { log "dracut failed"; exit 1; }
 
 log "Adding new kernel entry to GRUB via grubby..."
-sudo grubby --add-kernel=/boot/vmlinuz-custom --initrd=/boot/initramfs-custom.img --title="Custom Kernel $KVER" || {
+sudo grubby --add-kernel=/boot/vmlinuz-custom --initrd=/boot/initramfs-custom.img --title="Custom Kernel $KVER" --make-default || {
     log "grubby failed; updating GRUB configuration manually..."
     sudo grub2-mkconfig -o /boot/grub2/grub.cfg
 }
 
 log "Verifying new GRUB entry..."
-if sudo grubby --default-kernel | grep -q "vmlinuz-custom"; then
+DEFAULT_KERNEL=$(sudo grubby --default-kernel)
+if echo "$DEFAULT_KERNEL" | grep -q "vmlinuz-custom"; then
     log "Custom kernel is now set as the default."
 else
     log "Custom kernel added. Please review GRUB configuration if needed."
 fi
 
-log "Kernel installation complete. You may reboot the VM to boot into the new kernel."
+log "Kernel installation complete. Rebooting to test the custom kernel..."
+sudo reboot
 REMOTE_EOF
 
-log "Kernel installation completed inside the VM."
-log "You can SSH into the VM using: ssh -p 2222 ${SSH_USER}@localhost"
-log "To reboot the VM and test the new kernel, SSH into the VM and run: sudo reboot"
-log "The VM will persist between reboots. To stop the VM, kill the process with PID ${VM_PID}."
+log "Kernel installation commands were sent to the VM."
+log "After reboot, SSH back into the VM with: ssh -p 2222 ${SSH_USER}@localhost"
