@@ -11,7 +11,8 @@ log() {
 log "Fetching latest stable Linux kernel version from kernel.org..."
 KERNEL_RELEASES_JSON=$(curl -s https://www.kernel.org/releases.json)
 
-LATEST_VERSION=$(echo "$KERNEL_RELEASES_JSON" | jq -r '.latest_stable')
+# Extract the version string from the JSON using the proper key path
+LATEST_VERSION=$(echo "$KERNEL_RELEASES_JSON" | jq -r '.latest_stable.version')
 if [[ -z "$LATEST_VERSION" || "$LATEST_VERSION" == "null" ]]; then
   log "Error: Could not retrieve the latest stable kernel version."
   exit 1
