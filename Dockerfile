@@ -14,6 +14,8 @@ RUN dnf -y update && \
         wget \
         curl \
         jq \
+        bc \
+        perl \
         xz && \
     dnf clean all
 
