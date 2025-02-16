@@ -18,8 +18,9 @@ VCPUS=16                # 16 vCPUs
 DISK_SIZE="35G"         # Disk image size
 
 # ========= Helper Functions =========
+# Use ANSI escape sequences for green text and blank lines before/after each log message
 log() {
-    echo "[$(date +"%Y-%m-%d %H:%M:%S")] $*"
+    echo -e "\n\e[32m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
 }
 
 # ========= 1. Prepare the VM Disk and Cloud Image =========
@@ -30,7 +31,6 @@ if [ ! -f "$DISK_IMAGE" ]; then
         wget -O "$CLOUD_IMAGE" "$CLOUD_IMAGE_URL" || { log "Error downloading Fedora Cloud image"; exit 1; }
     fi
     log "Creating qcow2 disk with backing file..."
-    # Specify backing file format with -F
     qemu-img create -f qcow2 -b "$CLOUD_IMAGE" -F qcow2 "$DISK_IMAGE" "$DISK_SIZE" || { log "Error creating disk image"; exit 1; }
 fi
 
@@ -38,7 +38,6 @@ fi
 if [ ! -f "$CLOUD_INIT_ISO" ]; then
     log "Creating cloud-init ISO for initial VM configuration..."
     mkdir -p cloudinit
-    # Create user-data to configure a default user with passwordless sudo and SSH enabled
     cat > cloudinit/user-data <<EOF
 #cloud-config
 users:
@@ -56,13 +55,11 @@ chpasswd:
 ssh_pwauth: True
 EOF
 
-    # Minimal meta-data
     cat > cloudinit/meta-data <<EOF
 instance-id: ${VM_NAME}
 local-hostname: ${VM_NAME}
 EOF
 
-    # Create the ISO (requires genisoimage or mkisofs)
     genisoimage -output "${CLOUD_INIT_ISO}" -volid cidata -joliet -rock cloudinit/user-data cloudinit/meta-data \
         || { log "Error creating cloud-init ISO"; exit 1; }
     rm -rf cloudinit
@@ -82,6 +79,8 @@ qemu-system-x86_64 \
     -fsdev local,id=host_out,path="${OUT_DIR}",security_model=passthrough \
     -device virtio-9p-pci,fsdev=host_out,mount_tag=host_out \
     -nographic &
+
+sleep 10
 
 VM_PID=$!
 log "VM launched (PID ${VM_PID})."
@@ -103,9 +102,13 @@ fi
 
 # ========= 5. Install the Custom Kernel in the VM =========
 log "Connecting via SSH to install the custom kernel..."
+ssh-keygen -f "/home/shardul/.ssh/known_hosts" -R "[localhost]:2222"
 ssh -tt -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'REMOTE_EOF'
 set -euo pipefail
-log() { echo "[$(date +"%Y-%m-%d %H:%M:%S")] $*"; }
+# Use a similar log function with color for readability inside the VM
+log() {
+    echo -e "\n\e[34m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
+}
 
 log "Ensuring shared folder is mounted at /host_out..."
 if ! mountpoint -q /host_out; then
@@ -113,13 +116,11 @@ if ! mountpoint -q /host_out; then
     sudo mount -t 9p -o trans=virtio host_out /host_out || { log "Error mounting shared folder"; exit 1; }
 fi
 
-# Check for compiled kernel artifacts
 if [ ! -f /host_out/kernel_artifacts/bzImage ]; then
     log "Error: Kernel image not found at /host_out/kernel_artifacts/bzImage"
     exit 1
 fi
 
-# Determine kernel version from the modules directory name
 KVER=$(ls /host_out/kernel_artifacts/lib/modules 2>/dev/null | head -n 1)
 if [ -z "$KVER" ]; then
     log "Error: Could not detect kernel version from /host_out/kernel_artifacts/lib/modules"
@@ -141,14 +142,11 @@ log "Generating initramfs for the new kernel..."
 sudo dracut -f /boot/initramfs-custom.img $KVER || { log "dracut failed"; exit 1; }
 
 log "Adding new kernel entry to bootloader..."
-# Attempt to add the kernel entry with grubby and force it as default.
 sudo grubby --add-kernel=/boot/vmlinuz-custom --initrd=/boot/initramfs-custom.img --title="Custom Kernel $KVER" --make-default || {
     log "grubby failed; updating bootloader configuration manually..."
-    # Attempt GRUB2 config regeneration (adjust path if needed for UEFI)
     sudo grub2-mkconfig -o /boot/grub2/grub.cfg
 }
 
-# Verify new default kernel entry
 DEFAULT_KERNEL=$(sudo grubby --default-kernel 2>/dev/null || echo "unknown")
 log "Current default kernel: $DEFAULT_KERNEL"
 if echo "$DEFAULT_KERNEL" | grep -q "vmlinuz-custom"; then
@@ -158,7 +156,6 @@ else
 fi
 
 log "Kernel installation complete. Rebooting to test the custom kernel..."
-sudo reboot
 REMOTE_EOF
 
 log "Kernel installation commands were sent to the VM."
