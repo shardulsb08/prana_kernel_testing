@@ -43,7 +43,7 @@ log "Starting kernel compilation with $(nproc) parallel jobs..."
 make -j"$(nproc)"
 
 # 6. Prepare kernel artifacts for installation
-# Create a directory outside the source tree to store artifacts
+# Create a directory to store artifacts
 cd ..
 mkdir -p kernel_artifacts
 
@@ -66,5 +66,10 @@ cd ..
 log "Packaging kernel artifacts into kernel_artifacts.tar.gz..."
 tar -czf kernel_artifacts.tar.gz -C kernel_artifacts .
 
+# 7. Create an 'out' directory for the host and move the outputs there
+log "Moving build artifacts to the output directory..."
+mkdir -p out
+mv kernel_artifacts kernel_artifacts.tar.gz out/
+
 log "Kernel build and packaging completed successfully."
-log "Kernel artifacts are available in: $(pwd)/kernel_artifacts.tar.gz"
+log "All build artifacts are available in the /build/out directory."

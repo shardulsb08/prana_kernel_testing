@@ -24,5 +24,10 @@ WORKDIR /build
 COPY build_kernel.sh /usr/local/bin/build_kernel.sh
 RUN chmod +x /usr/local/bin/build_kernel.sh
 
+# Declare a volume for output artifacts.
+# To have the host receive the output, run the container with a bind mount:
+#   docker run --rm -v $(pwd)/out:/build/out kernel-builder
+VOLUME ["/build/out"]
+
 # Use the build script as the container entrypoint
 ENTRYPOINT ["/usr/local/bin/build_kernel.sh"]
