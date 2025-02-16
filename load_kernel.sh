@@ -23,8 +23,6 @@ log() {
 }
 
 # ========= 1. Prepare the VM Disk and Cloud Image =========
-
-# If the disk image doesn't exist, create it using the Fedora Cloud image as backing file.
 if [ ! -f "$DISK_IMAGE" ]; then
     log "Disk image '$DISK_IMAGE' not found; creating a new 35GB disk image..."
     if [ ! -f "$CLOUD_IMAGE" ]; then
@@ -40,7 +38,7 @@ fi
 if [ ! -f "$CLOUD_INIT_ISO" ]; then
     log "Creating cloud-init ISO for initial VM configuration..."
     mkdir -p cloudinit
-    # Generate user-data (configures a user with sudo privileges and SSH password auth enabled)
+    # Create user-data to configure a default user with passwordless sudo and SSH enabled
     cat > cloudinit/user-data <<EOF
 #cloud-config
 users:
@@ -64,7 +62,7 @@ instance-id: ${VM_NAME}
 local-hostname: ${VM_NAME}
 EOF
 
-    # Create the ISO (requires genisoimage; if not available, try mkisofs)
+    # Create the ISO (requires genisoimage or mkisofs)
     genisoimage -output "${CLOUD_INIT_ISO}" -volid cidata -joliet -rock cloudinit/user-data cloudinit/meta-data \
         || { log "Error creating cloud-init ISO"; exit 1; }
     rm -rf cloudinit
@@ -72,8 +70,6 @@ fi
 
 # ========= 3. Launch the QEMU VM =========
 log "Launching QEMU VM with ${RAM_MB}MB RAM and ${VCPUS} vCPUs..."
-
-# Launch QEMU in background (using -nographic so it runs in the current terminal)
 qemu-system-x86_64 \
     -enable-kvm \
     -m ${RAM_MB} \
@@ -107,7 +103,7 @@ fi
 
 # ========= 5. Install the Custom Kernel in the VM =========
 log "Connecting via SSH to install the custom kernel..."
-ssh -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'REMOTE_EOF'
+ssh -tt -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'REMOTE_EOF'
 set -euo pipefail
 log() { echo "[$(date +"%Y-%m-%d %H:%M:%S")] $*"; }
 
@@ -117,7 +113,7 @@ if ! mountpoint -q /host_out; then
     sudo mount -t 9p -o trans=virtio host_out /host_out || { log "Error mounting shared folder"; exit 1; }
 fi
 
-log "Verifying compiled kernel artifacts exist in /host_out/kernel_artifacts..."
+# Check for compiled kernel artifacts
 if [ ! -f /host_out/kernel_artifacts/bzImage ]; then
     log "Error: Kernel image not found at /host_out/kernel_artifacts/bzImage"
     exit 1
@@ -144,18 +140,21 @@ sudo cp -r /host_out/kernel_artifacts/lib/modules/$KVER/* /lib/modules/$KVER/ ||
 log "Generating initramfs for the new kernel..."
 sudo dracut -f /boot/initramfs-custom.img $KVER || { log "dracut failed"; exit 1; }
 
-log "Adding new kernel entry to GRUB via grubby..."
+log "Adding new kernel entry to bootloader..."
+# Attempt to add the kernel entry with grubby and force it as default.
 sudo grubby --add-kernel=/boot/vmlinuz-custom --initrd=/boot/initramfs-custom.img --title="Custom Kernel $KVER" --make-default || {
-    log "grubby failed; updating GRUB configuration manually..."
+    log "grubby failed; updating bootloader configuration manually..."
+    # Attempt GRUB2 config regeneration (adjust path if needed for UEFI)
     sudo grub2-mkconfig -o /boot/grub2/grub.cfg
 }
 
-log "Verifying new GRUB entry..."
-DEFAULT_KERNEL=$(sudo grubby --default-kernel)
+# Verify new default kernel entry
+DEFAULT_KERNEL=$(sudo grubby --default-kernel 2>/dev/null || echo "unknown")
+log "Current default kernel: $DEFAULT_KERNEL"
 if echo "$DEFAULT_KERNEL" | grep -q "vmlinuz-custom"; then
     log "Custom kernel is now set as the default."
 else
-    log "Custom kernel added. Please review GRUB configuration if needed."
+    log "Custom kernel may not have been set as default. Please review bootloader configuration."
 fi
 
 log "Kernel installation complete. Rebooting to test the custom kernel..."

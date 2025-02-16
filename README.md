@@ -4,3 +4,11 @@ Current way to run it:
 ./run_build.sh
 
 Compiled image is stored in out/ directory.
+
+The ./load_kernel.sh script tries to isntall the kernel in QEMU VM.
+Fedora default credentails:
+uname: user
+passwd: fedora
+
+Access it via:
+ssh -p 2222 user@localhost
