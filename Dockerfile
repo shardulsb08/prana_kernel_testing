@@ -1,35 +1,34 @@
-# Use the minimal Fedora image as base
 FROM fedora:latest
 
-# Update system and install dependencies required for kernel build
+# Install Fedora kernel build dependencies plus additional tools
 RUN dnf -y update && \
     dnf -y install \
+        fedpkg \
+        rpm-build \
+        ncurses-devel \
+        pesign \
         gcc \
         make \
-        ncurses-devel \
-        bison \
         flex \
+        bison \
         openssl-devel \
         elfutils-libelf-devel \
         wget \
         curl \
         jq \
+        xz \
         bc \
-        perl \
-        xz && \
+        perl && \
     dnf clean all
 
-# Set working directory
 WORKDIR /build
 
-# Copy the kernel build script into the container and make it executable
-COPY build_kernel.sh /usr/local/bin/build_kernel.sh
-RUN chmod +x /usr/local/bin/build_kernel.sh
+# Copy our kernel build script into the image
+COPY build_kernel_rpm.sh /usr/local/bin/build_kernel_rpm.sh
+RUN chmod +x /usr/local/bin/build_kernel_rpm.sh
 
-# Declare a volume for output artifacts.
-# To have the host receive the output, run the container with a bind mount:
-#   docker run --rm -v $(pwd)/out:/build/out kernel-builder
+# Create a volume for output RPMs
 VOLUME ["/build/out"]
 
-# Use the build script as the container entrypoint
-ENTRYPOINT ["/usr/local/bin/build_kernel.sh"]
+# Use our script as the container entrypoint
+ENTRYPOINT ["/usr/local/bin/build_kernel_rpm.sh"]
