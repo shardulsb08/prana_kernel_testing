@@ -19,6 +19,7 @@ RUN dnf -y update && \
         xz \
         bc \
         perl \
+        openssl \
         git && \
     dnf clean all
 
