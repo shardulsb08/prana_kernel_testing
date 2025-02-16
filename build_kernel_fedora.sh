@@ -36,7 +36,7 @@ if [ ! -f .config ]; then
     # Generate all configuration files (this script is provided in the Fedora kernel repo)
     ./generate_all_configs.sh
     # Copy the configuration for x86_64 (adjust if needed for a different architecture)
-    cp kernel-x86_64.config ../linux/.config
+    cp kernel-x86_64-fedora.config ../linux/.config
     cd linux
 fi
 

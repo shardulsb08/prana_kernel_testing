@@ -1,6 +1,6 @@
 FROM fedora:latest
 
-# Install Fedora kernel build dependencies plus additional tools
+# Install Fedora kernel build dependencies and additional tools
 RUN dnf -y update && \
     dnf -y install \
         fedpkg \
@@ -18,17 +18,18 @@ RUN dnf -y update && \
         jq \
         xz \
         bc \
-        perl && \
+        perl \
+        git && \
     dnf clean all
 
 WORKDIR /build
 
-# Copy our kernel build script into the image
-COPY build_kernel_rpm.sh /usr/local/bin/build_kernel_rpm.sh
-RUN chmod +x /usr/local/bin/build_kernel_rpm.sh
+# Copy the build script into the image
+COPY build_kernel_fedora.sh /usr/local/bin/build_kernel_fedora.sh
+RUN chmod +x /usr/local/bin/build_kernel_fedora.sh
 
-# Create a volume for output RPMs
+# Create a volume for output artifacts (kernel image, modules)
 VOLUME ["/build/out"]
 
-# Use our script as the container entrypoint
-ENTRYPOINT ["/usr/local/bin/build_kernel_rpm.sh"]
+# Use the build script as the container entrypoint
+ENTRYPOINT ["/usr/local/bin/build_kernel_fedora.sh"]
