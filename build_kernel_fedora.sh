@@ -115,19 +115,19 @@ log "Fetching all git tags..."
 git fetch --tags
 
 # Get the latest stable version from kernel.org
-log "Fetching latest stable kernel version from kernel.org..."
-LATEST_STABLE=$(curl -s https://www.kernel.org/finger_banner | grep "latest stable version" | awk '{print $NF}')
-if [ -z "$LATEST_STABLE" ]; then
-    log "Error: Unable to fetch latest stable kernel version."
-    exit 1
-fi
-
-# Check out the corresponding tag (e.g., v6.14.1)
-log "Checking out kernel tag v${LATEST_STABLE}..."
-git checkout "v${LATEST_STABLE}" || {
-    log "Error: Failed to check out tag v${LATEST_STABLE}. It may not exist yet."
-    exit 1
-}
+#log "Fetching latest stable kernel version from kernel.org..."
+#LATEST_STABLE=$(curl -s https://www.kernel.org/finger_banner | grep "latest stable version" | awk '{print $NF}')
+#if [ -z "$LATEST_STABLE" ]; then
+#    log "Error: Unable to fetch latest stable kernel version."
+#    exit 1
+#fi
+#
+## Check out the corresponding tag (e.g., v6.14.1)
+#log "Checking out kernel tag v${LATEST_STABLE}..."
+#git checkout "v${LATEST_STABLE}" || {
+#    log "Error: Failed to check out tag v${LATEST_STABLE}. It may not exist yet."
+#    exit 1
+#}
 
 # 3. Update configuration
 log "Updating kernel configuration with 'make oldconfig'..."
