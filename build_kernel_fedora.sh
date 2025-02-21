@@ -21,8 +21,30 @@ fi
 cd linux
 
 # (Optional) You can add a remote for stable releases if needed:
-# git remote add stable git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git || true
-# git fetch stable
+
+# Add the stable kernel remote if not already present
+log "Adding stable kernel remote..."
+git remote add stable git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git || true
+
+# Fetch all tags from both remotes
+log "Fetching all git tags from origin and stable remotes..."
+git fetch --tags origin
+git fetch --tags stable
+
+# Get the latest stable version from kernel.org
+log "Fetching latest stable kernel version from kernel.org..."
+LATEST_STABLE=$(curl -s https://www.kernel.org/finger_banner | grep "latest stable version" | awk '{print $NF}')
+if [ -z "$LATEST_STABLE" ]; then
+    log "Error: Unable to fetch latest stable kernel version."
+    exit 1
+fi
+
+# Check out the corresponding tag (e.g., v6.13.4)
+log "Checking out kernel tag v${LATEST_STABLE}..."
+git checkout "v${LATEST_STABLE}" || {
+    log "Error: Failed to check out tag v${LATEST_STABLE}. It may not exist or tags are outdated."
+    exit 1
+}
 
 cd ..
 
