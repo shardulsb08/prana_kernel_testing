@@ -78,6 +78,7 @@ qemu-system-x86_64 \
     -net nic \
     -fsdev local,id=host_out,path="${OUT_DIR}",security_model=passthrough \
     -device virtio-9p-pci,fsdev=host_out,mount_tag=host_out \
+    -serial stdio \
     -nographic &
 
 sleep 10
@@ -141,8 +142,8 @@ sudo cp -r /host_out/kernel_artifacts/lib/modules/$KVER/* /lib/modules/$KVER/ ||
 log "Generating initramfs for the new kernel..."
 sudo dracut -f /boot/initramfs-custom.img $KVER || { log "dracut failed"; exit 1; }
 
-log "Adding new kernel entry to bootloader..."
-sudo grubby --add-kernel=/boot/vmlinuz-custom --initrd=/boot/initramfs-custom.img --title="Custom Kernel $KVER" --make-default || {
+log "Adding new kernel entry to bootloader with boot parameters..."
+sudo grubby --add-kernel=/boot/vmlinuz-custom --initrd=/boot/initramfs-custom.img --title="Custom Kernel $KVER" --args="root=/dev/vda1 console=ttyS0" --make-default || {
     log "grubby failed; updating bootloader configuration manually..."
     sudo grub2-mkconfig -o /boot/grub2/grub.cfg
 }
@@ -152,10 +153,12 @@ log "Current default kernel: $DEFAULT_KERNEL"
 if echo "$DEFAULT_KERNEL" | grep -q "vmlinuz-custom"; then
     log "Custom kernel is now set as the default."
 else
-    log "Custom kernel may not have been set as default. Please review bootloader configuration."
+    log "Custom kernel not set as default. Setting manually..."
+    sudo grubby --set-default=/boot/vmlinuz-custom
 fi
 
 log "Kernel installation complete. Rebooting to test the custom kernel..."
+sudo reboot
 REMOTE_EOF
 
 log "Kernel installation commands were sent to the VM."

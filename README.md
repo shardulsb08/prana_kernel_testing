@@ -1,7 +1,10 @@
-This project mainly intends to download the required kernel release (Mainline stable kernel by default) and run certain tests on it. The goal is to add as many tests as possible and depen on what utility they serve me.
+# Kernel Build and Boot Project
+This project builds a custom Linux kernel and installs it in a QEMU VM.
 
-Current way to run it:
-./run_build.sh
+## Current Workflow
+1. Build the kernel:
+   ```bash
+   ./run_build_fedora.sh
 
 Compiled image is stored in out/ directory.
 
