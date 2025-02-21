@@ -8,7 +8,9 @@ log() {
 }
 
 # Create output directory for artifacts
-mkdir -p out
+# Use an absolute path for the out directory
+OUT_DIR="/build/out/kernel_artifacts"
+mkdir -p "$OUT_DIR"
 
 # 1. Clone the upstream kernel source if not already present
 if [ ! -d "linux" ]; then
@@ -86,6 +88,25 @@ fi
 
 cd linux
 
+# Fetch all tags to ensure we have the latest
+log "Fetching all git tags..."
+git fetch --tags
+
+# Get the latest stable version from kernel.org
+log "Fetching latest stable kernel version from kernel.org..."
+LATEST_STABLE=$(curl -s https://www.kernel.org/finger_banner | grep "latest stable version" | awk '{print $NF}')
+if [ -z "$LATEST_STABLE" ]; then
+    log "Error: Unable to fetch latest stable kernel version."
+    exit 1
+fi
+
+# Check out the corresponding tag (e.g., v6.14.1)
+log "Checking out kernel tag v${LATEST_STABLE}..."
+git checkout "v${LATEST_STABLE}" || {
+    log "Error: Failed to check out tag v${LATEST_STABLE}. It may not exist yet."
+    exit 1
+}
+
 # 3. Update configuration
 log "Updating kernel configuration with 'make oldconfig'..."
 make oldconfig
@@ -100,11 +121,15 @@ make -j"$(nproc)" bzImage
 log "Building kernel modules..."
 make -j"$(nproc)" modules
 
-# 5. Install modules and copy the kernel image to the output directory
-log "Installing kernel modules into ../out directory..."
-make modules_install INSTALL_MOD_PATH=../out
 
-log "Copying kernel image (bzImage) to ../out directory as bzImage-custom..."
-cp arch/x86/boot/bzImage ../out/bzImage-custom
+# 5. Clone or update repositories as needed...
+# (Rest of the script remains the same, but when copying the kernel image and installing modules,
+#  use $OUT_DIR instead of relative paths.)
+log "Copying kernel image (bzImage) to ${OUT_DIR}/bzImage-custom..."
+cp arch/x86/boot/bzImage "$OUT_DIR/bzImage-custom"
 
-log "Kernel build complete. Artifacts available in the 'out' directory."
+# ... and similarly for modules_install:
+log "Installing kernel modules into ${OUT_DIR}..."
+make modules_install INSTALL_MOD_PATH="$OUT_DIR"
+
+log "Kernel build complete. Artifacts are available in ${OUT_DIR}."

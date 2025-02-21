@@ -8,7 +8,7 @@ DISK_IMAGE="fedora_vm.qcow2"
 CLOUD_IMAGE="Fedora-Cloud-Base-38-1.6.x86_64.qcow2"
 CLOUD_IMAGE_URL="https://download.fedoraproject.org/pub/fedora/linux/releases/38/Cloud/x86_64/images/${CLOUD_IMAGE}"
 CLOUD_INIT_ISO="seed.iso"
-OUT_DIR="$(pwd)/out"    # Directory containing compiled kernel artifacts (from Docker build)
+OUT_DIR="$(pwd)/container_kernel_workspace/out"    # Directory containing compiled kernel artifacts (from Docker build)
 SSH_USER="user"
 SSH_PASS="fedora"        # Default password (set in cloud-init below)
 
@@ -116,8 +116,8 @@ if ! mountpoint -q /host_out; then
     sudo mount -t 9p -o trans=virtio host_out /host_out || { log "Error mounting shared folder"; exit 1; }
 fi
 
-if [ ! -f /host_out/kernel_artifacts/bzImage ]; then
-    log "Error: Kernel image not found at /host_out/kernel_artifacts/bzImage"
+if [ ! -f /host_out/kernel_artifacts/bzImage-custom ]; then
+    log "Error: Kernel image not found at /host_out/kernel_artifacts/bzImage-custom"
     exit 1
 fi
 
@@ -132,7 +132,7 @@ log "Remounting /boot as read-write..."
 sudo mount -o remount,rw /boot || { log "Failed to remount /boot as read-write"; exit 1; }
 
 log "Copying new kernel image to /boot/vmlinuz-custom..."
-sudo cp /host_out/kernel_artifacts/bzImage /boot/vmlinuz-custom || { log "Failed to copy kernel image"; exit 1; }
+sudo cp /host_out/kernel_artifacts/bzImage-custom /boot/vmlinuz-custom || { log "Failed to copy kernel image"; exit 1; }
 
 log "Installing kernel modules..."
 sudo mkdir -p /lib/modules/$KVER

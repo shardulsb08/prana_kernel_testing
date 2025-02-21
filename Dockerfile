@@ -20,6 +20,7 @@ RUN dnf -y update && \
         bc \
         perl \
         openssl \
+        dracut \
         git && \
     dnf clean all
 
@@ -30,7 +31,7 @@ COPY build_kernel_fedora.sh /usr/local/bin/build_kernel_fedora.sh
 RUN chmod +x /usr/local/bin/build_kernel_fedora.sh
 
 # Create a volume for output artifacts (kernel image, modules)
-VOLUME ["/build/out"]
+VOLUME ["/build"]
 
 # Use the build script as the container entrypoint
 ENTRYPOINT ["/usr/local/bin/build_kernel_fedora.sh"]
