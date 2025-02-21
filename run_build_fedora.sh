@@ -1,6 +1,4 @@
 #!/bin/bash
-# run_build.sh
-# Build the Docker image and run the container using a named volume (kernel_workspace)
+# Build the Docker image and run a persistent container for kernel compilation
 docker build -t kernel-builder-fedora .
-docker run --rm -it -v "$(pwd)/container_kernel_workspace":/build kernel-builder-fedora
-
+docker run -it -v "$(pwd)/container_kernel_workspace":/build --name kernel-builder-fedora-container kernel-builder-fedora
