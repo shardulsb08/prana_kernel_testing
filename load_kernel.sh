@@ -78,7 +78,6 @@ qemu-system-x86_64 \
     -net nic \
     -fsdev local,id=host_out,path="${OUT_DIR}",security_model=passthrough \
     -device virtio-9p-pci,fsdev=host_out,mount_tag=host_out \
-    -serial stdio \
     -nographic &
 
 sleep 10
