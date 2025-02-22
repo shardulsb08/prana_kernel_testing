@@ -130,7 +130,8 @@ log "Detected custom kernel version: $KVER"
 
 # Retrieve the UUID of the root filesystem
 log "Retrieving UUID of the root filesystem..."
-ROOT_UUID=$(sudo blkid -s UUID -o value $(findmnt -n -o SOURCE --target /))
+ROOT_DEVICE=$(findmnt -n -o SOURCE --target / | sed 's/\[.*\]//')
+ROOT_UUID=$(sudo blkid -s UUID -o value "$ROOT_DEVICE")
 if [ -z "$ROOT_UUID" ]; then
     log "Error: Could not determine root filesystem UUID"
     exit 1
