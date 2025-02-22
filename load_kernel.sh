@@ -71,7 +71,7 @@ qemu-system-x86_64 \
     -enable-kvm \
     -m ${RAM_MB} \
     -smp ${VCPUS} \
-    -drive file="${DISK_IMAGE}",format=qcow2 \
+    -drive file="${DISK_IMAGE}",format=qcow2,if=virtio \
     -cdrom "${CLOUD_INIT_ISO}" \
     -boot d \
     -net user,hostfwd=tcp::2222-:22 \
@@ -128,6 +128,15 @@ if [ -z "$KVER" ]; then
 fi
 log "Detected custom kernel version: $KVER"
 
+# Retrieve the UUID of the root filesystem
+log "Retrieving UUID of the root filesystem..."
+ROOT_UUID=$(sudo blkid -s UUID -o value $(findmnt -n -o SOURCE --target /))
+if [ -z "$ROOT_UUID" ]; then
+    log "Error: Could not determine root filesystem UUID"
+    exit 1
+fi
+log "Root filesystem UUID: $ROOT_UUID"
+
 log "Remounting /boot as read-write..."
 sudo mount -o remount,rw /boot || { log "Failed to remount /boot as read-write"; exit 1; }
 
@@ -139,10 +148,10 @@ sudo mkdir -p /lib/modules/$KVER
 sudo cp -r /host_out/kernel_artifacts/lib/modules/$KVER/* /lib/modules/$KVER/ || { log "Failed to copy kernel modules"; exit 1; }
 
 log "Generating initramfs for the new kernel..."
-sudo dracut -f /boot/initramfs-custom.img $KVER || { log "dracut failed"; exit 1; }
+sudo dracut -f --add-drivers "virtio_blk virtio_pci" /boot/initramfs-custom.img $KVER || { log "dracut failed"; exit 1; }
 
-log "Adding new kernel entry to bootloader with boot parameters..."
-sudo grubby --add-kernel=/boot/vmlinuz-custom --initrd=/boot/initramfs-custom.img --title="Custom Kernel $KVER" --args="root=/dev/vda1 console=ttyS0" --make-default || {
+log "Adding new kernel entry to bootloader with boot parameters using UUID..."
+sudo grubby --add-kernel=/boot/vmlinuz-custom --initrd=/boot/initramfs-custom.img --title="Custom Kernel $KVER" --args="root=UUID=$ROOT_UUID console=ttyS0" --make-default || {
     log "grubby failed; updating bootloader configuration manually..."
     sudo grub2-mkconfig -o /boot/grub2/grub.cfg
 }
