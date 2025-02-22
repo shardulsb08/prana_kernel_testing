@@ -130,8 +130,8 @@ git fetch --tags
 #}
 
 # 3. Update configuration
-log "Updating kernel configuration with 'make oldconfig'..."
-make oldconfig
+log "Updating kernel configuration with 'make olddefconfig'..."
+make olddefconfig
 
 # (Optional) Uncomment the next line for interactive configuration
 # make menuconfig
