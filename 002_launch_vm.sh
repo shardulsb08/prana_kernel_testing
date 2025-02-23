@@ -1,27 +1,36 @@
 #!/bin/bash
 set -euo pipefail
 
+# Determine the script's directory for consistent file paths
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+
 # ========= Configuration Variables =========
 VM_NAME="fedora-vm"
-DISK_IMAGE="fedora_vm.qcow2"
-# Fedora Cloud Base image (adjust URL as needed)
-CLOUD_IMAGE="Fedora-Cloud-Base-38-1.6.x86_64.qcow2"
-CLOUD_IMAGE_URL="https://download.fedoraproject.org/pub/fedora/linux/releases/38/Cloud/x86_64/images/${CLOUD_IMAGE}"
-CLOUD_INIT_ISO="seed.iso"
-OUT_DIR="$(pwd)/container_kernel_workspace/out"    # Directory containing compiled kernel artifacts (from Docker build)
+DISK_IMAGE="$SCRIPT_DIR/fedora_vm.qcow2"
+CLOUD_IMAGE="$SCRIPT_DIR/Fedora-Cloud-Base-38-1.6.x86_64.qcow2"
+CLOUD_IMAGE_URL="https://download.fedoraproject.org/pub/fedora/linux/releases/38/Cloud/x86_64/images/${CLOUD_IMAGE##*/}"
+CLOUD_INIT_ISO="$SCRIPT_DIR/seed.iso"
+OUT_DIR="$SCRIPT_DIR/container_kernel_workspace/out"  # Directory with kernel artifacts
 SSH_USER="user"
-SSH_PASS="fedora"        # Default password (set in cloud-init below)
+SSH_PASS="fedora"  # Default password (set in cloud-init)
 
 # VM resources
-RAM_MB=20480            # 20GB RAM
-VCPUS=16                # 16 vCPUs
-DISK_SIZE="35G"         # Disk image size
+RAM_MB=20480  # 20GB RAM
+VCPUS=16      # 16 vCPUs
+DISK_SIZE="35G"  # Disk image size
 
 # ========= Helper Functions =========
-# Use ANSI escape sequences for green text and blank lines before/after each log message
 log() {
     echo -e "\n\e[32m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
 }
+
+# ========= Parse Command-Line Arguments =========
+INSTALL_KERNEL=false
+for arg in "$@"; do
+    if [ "$arg" == "--install-kernel" ]; then
+        INSTALL_KERNEL=true
+    fi
+done
 
 # ========= 1. Prepare the VM Disk and Cloud Image =========
 if [ ! -f "$DISK_IMAGE" ]; then
@@ -37,8 +46,8 @@ fi
 # ========= 2. Create Cloud-Init ISO =========
 if [ ! -f "$CLOUD_INIT_ISO" ]; then
     log "Creating cloud-init ISO for initial VM configuration..."
-    mkdir -p cloudinit
-    cat > cloudinit/user-data <<EOF
+    mkdir -p "$SCRIPT_DIR/cloudinit"
+    cat > "$SCRIPT_DIR/cloudinit/user-data" <<EOF
 #cloud-config
 users:
   - name: ${SSH_USER}
@@ -55,14 +64,14 @@ chpasswd:
 ssh_pwauth: True
 EOF
 
-    cat > cloudinit/meta-data <<EOF
+    cat > "$SCRIPT_DIR/cloudinit/meta-data" <<EOF
 instance-id: ${VM_NAME}
 local-hostname: ${VM_NAME}
 EOF
 
-    genisoimage -output "${CLOUD_INIT_ISO}" -volid cidata -joliet -rock cloudinit/user-data cloudinit/meta-data \
+    genisoimage -output "${CLOUD_INIT_ISO}" -volid cidata -joliet -rock "$SCRIPT_DIR/cloudinit/user-data" "$SCRIPT_DIR/cloudinit/meta-data" \
         || { log "Error creating cloud-init ISO"; exit 1; }
-    rm -rf cloudinit
+    rm -rf "$SCRIPT_DIR/cloudinit"
 fi
 
 # ========= 3. Launch the QEMU VM =========
@@ -80,9 +89,12 @@ qemu-system-x86_64 \
     -device virtio-9p-pci,fsdev=host_out,mount_tag=host_out \
     -nographic &
 
-sleep 10
-
 VM_PID=$!
+sleep 10
+if ! kill -0 $VM_PID 2>/dev/null; then
+    log "Error: QEMU VM failed to start."
+    exit 1
+fi
 log "VM launched (PID ${VM_PID})."
 
 # ========= 4. Wait for SSH Access =========
@@ -100,12 +112,12 @@ if ! nc -z localhost 2222; then
     exit 1
 fi
 
-# ========= 5. Install the Custom Kernel in the VM =========
-log "Connecting via SSH to install the custom kernel..."
-ssh-keygen -f "/home/shardul/.ssh/known_hosts" -R "[localhost]:2222"
-ssh -tt -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'REMOTE_EOF'
+# ========= 5. Optional: Install the Custom Kernel =========
+if [ "$INSTALL_KERNEL" == "true" ]; then
+    log "Connecting via SSH to install the custom kernel..."
+    ssh-keygen -f "${HOME}/.ssh/known_hosts" -R "[localhost]:2222"
+    ssh -tt -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'REMOTE_EOF'
 set -euo pipefail
-# Use a similar log function with color for readability inside the VM
 log() {
     echo -e "\n\e[34m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
 }
@@ -116,19 +128,21 @@ if ! mountpoint -q /host_out; then
     sudo mount -t 9p -o trans=virtio host_out /host_out || { log "Error mounting shared folder"; exit 1; }
 fi
 
-if [ ! -f /host_out/kernel_artifacts/bzImage-custom ]; then
-    log "Error: Kernel image not found at /host_out/kernel_artifacts/bzImage-custom"
-    exit 1
-fi
-
-KVER=$(ls /host_out/kernel_artifacts/lib/modules 2>/dev/null | head -n 1)
+log "Detecting kernel version from artifact directory..."
+# Look for versioned directories under /host_out/kernel_artifacts/
+KVER=$(ls -d /host_out/kernel_artifacts/v* 2>/dev/null | sort -V | tail -n 1 | sed 's|.*/v||')
 if [ -z "$KVER" ]; then
-    log "Error: Could not detect kernel version from /host_out/kernel_artifacts/lib/modules"
+    log "Error: Could not detect kernel version from /host_out/kernel_artifacts/"
     exit 1
 fi
 log "Detected custom kernel version: $KVER"
 
-# Retrieve the UUID of the root filesystem
+ARTIFACT_DIR="/host_out/kernel_artifacts/v${KVER}"
+if [ ! -f "${ARTIFACT_DIR}/bzImage-custom" ]; then
+    log "Error: Kernel image not found at ${ARTIFACT_DIR}/bzImage-custom"
+    exit 1
+fi
+
 log "Retrieving UUID of the root filesystem..."
 ROOT_DEVICE=$(findmnt -n -o SOURCE --target / | sed 's/\[.*\]//')
 ROOT_UUID=$(sudo blkid -s UUID -o value "$ROOT_DEVICE")
@@ -142,11 +156,11 @@ log "Remounting /boot as read-write..."
 sudo mount -o remount,rw /boot || { log "Failed to remount /boot as read-write"; exit 1; }
 
 log "Copying new kernel image to /boot/vmlinuz-custom..."
-sudo cp /host_out/kernel_artifacts/bzImage-custom /boot/vmlinuz-custom || { log "Failed to copy kernel image"; exit 1; }
+sudo cp "${ARTIFACT_DIR}/bzImage-custom" /boot/vmlinuz-custom || { log "Failed to copy kernel image"; exit 1; }
 
 log "Installing kernel modules..."
 sudo mkdir -p /lib/modules/$KVER
-sudo cp -r /host_out/kernel_artifacts/lib/modules/$KVER/* /lib/modules/$KVER/ || { log "Failed to copy kernel modules"; exit 1; }
+sudo cp -r "${ARTIFACT_DIR}/lib/modules/$KVER/"* /lib/modules/$KVER/ || { log "Failed to copy kernel modules"; exit 1; }
 
 log "Generating initramfs for the new kernel..."
 sudo dracut -f --add-drivers "virtio_blk virtio_pci" /boot/initramfs-custom.img $KVER || { log "dracut failed"; exit 1; }
@@ -170,5 +184,8 @@ log "Kernel installation complete. Rebooting to test the custom kernel..."
 sudo reboot
 REMOTE_EOF
 
-log "Kernel installation commands were sent to the VM."
-log "After reboot, SSH back into the VM with: ssh -p 2222 ${SSH_USER}@localhost"
+    log "Kernel installation commands were sent to the VM."
+    log "After reboot, SSH back into the VM with: ssh -p 2222 ${SSH_USER}@localhost"
+else
+    log "VM is running. Connect via SSH with: ssh -p 2222 ${SSH_USER}@localhost"
+fi
