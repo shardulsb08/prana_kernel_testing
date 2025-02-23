@@ -3,11 +3,15 @@ log() {
     echo -e "\n\e[34m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
 }
 
-EXPECTED_KVER="6.13.4"  # Adjust as needed or pass as an argument
-log "Verifying kernel version..."
-if [ "$(uname -r)" != "$EXPECTED_KVER" ]; then
-    log "Error: Expected kernel $EXPECTED_KVER, got $(uname -r)"
-    exit 1
+EXPECTED_KVER="$1"  # Kernel version passed as an argument
+if [ -n "$EXPECTED_KVER" ]; then
+    log "Verifying kernel version..."
+    if [ "$(uname -r)" != "$EXPECTED_KVER" ]; then
+        log "Error: Expected kernel $EXPECTED_KVER, got $(uname -r)"
+        exit 1
+    fi
+else
+    log "No kernel version specified; skipping version check."
 fi
 
 log "Checking loaded modules..."

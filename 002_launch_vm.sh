@@ -13,6 +13,7 @@ CLOUD_INIT_ISO="$SCRIPT_DIR/seed.iso"
 OUT_DIR="$SCRIPT_DIR/container_kernel_workspace/out"  # Directory with kernel artifacts
 SSH_USER="user"
 SSH_PASS="fedora"  # Default password (set in cloud-init)
+TEST_CONFIG="$SCRIPT_DIR/host_drive/tests/test_config.txt"  # Path to test config on host
 
 # VM resources
 RAM_MB=20480  # 20GB RAM
@@ -194,12 +195,85 @@ sudo reboot
 REMOTE_EOF
 
     log "Kernel installation commands were sent to the VM."
-    log "After reboot, SSH back into the VM with: ssh -p 2222 ${SSH_USER}@localhost"
+    log "Waiting for VM to reboot and SSH to become available..."
+
+    # Wait for SSH to become available after reboot
+    for i in {1..30}; do
+        if nc -z localhost 2222; then
+            log "SSH is available after reboot."
+            break
+        fi
+        sleep 10
+    done
+
+    if ! nc -z localhost 2222; then
+        log "Error: SSH did not become available after reboot."
+        exit 1
+    fi
+
+    # Mount host_drive after reboot
+    log "Mounting host_drive after reboot..."
+    ssh -tt -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'EOF'
+    sudo mkdir -p /home/user/host_drive
+    sudo mount -t 9p -o trans=virtio host_drive /home/user/host_drive
+EOF
+
+    # If running tests after kernel install, update test_config.txt with KVER
+    if [ "$RUN_TESTS" == "true" ]; then
+        log "Updating test_config.txt with detected kernel version $KVER for smoke_test..."
+        if [ ! -f "$TEST_CONFIG" ]; then
+            echo "smoke_test $KVER" > "$TEST_CONFIG"
+        else
+            # Preserve other tests, update or add smoke_test with KVER
+            grep -v "^smoke_test" "$TEST_CONFIG" > "$TEST_CONFIG.tmp" || true
+            echo "smoke_test $KVER" >> "$TEST_CONFIG.tmp"
+            mv "$TEST_CONFIG.tmp" "$TEST_CONFIG"
+        fi
+
+        log "Triggering tests inside VM via 003_run_tests.sh..."
+        ssh -tt -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'TEST_EOF'
+        set -euo pipefail
+        log() {
+            echo -e "\n\e[34m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
+        }
+        log "Running 003_run_tests.sh inside VM..."
+        chmod +x /home/user/host_drive/003_run_tests.sh
+        /home/user/host_drive/003_run_tests.sh || {
+            log "Error: Test execution failed inside VM."
+            exit 1
+        }
+TEST_EOF
+        if [ $? -ne 0 ]; then
+            log "Error: Failed to run tests inside VM."
+            exit 1
+        fi
+    fi
 else
-    log "Connecting via SSH to install the custom kernel..."
+    log "Connecting via SSH to mount host_drive..."
     ssh -tt -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'EOF'
     sudo mkdir -p /home/user/host_drive
     sudo mount -t 9p -o trans=virtio host_drive /home/user/host_drive
 EOF
     log "VM is running. Connect via SSH with: ssh -p 2222 ${SSH_USER}@localhost"
+
+    # Trigger tests if requested (no kernel install)
+    if [ "$RUN_TESTS" == "true" ]; then
+        log "Triggering tests inside VM via 003_run_tests.sh..."
+        ssh -tt -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'TEST_EOF'
+        set -euo pipefail
+        log() {
+            echo -e "\n\e[34m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
+        }
+        log "Running 003_run_tests.sh inside VM..."
+        chmod +x /home/user/host_drive/003_run_tests.sh
+        /home/user/host_drive/003_run_tests.sh || {
+            log "Error: Test execution failed inside VM."
+            exit 1
+        }
+TEST_EOF
+        if [ $? -ne 0 ]; then
+            log "Error: Failed to run tests inside VM."
+            exit 1
+        fi
+    fi
 fi
