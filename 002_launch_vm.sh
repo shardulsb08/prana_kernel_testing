@@ -94,8 +94,8 @@ qemu-system-x86_64 \
     -net nic \
     -fsdev local,id=host_out,path="${OUT_DIR}",security_model=passthrough \
     -device virtio-9p-pci,fsdev=host_out,mount_tag=host_out \
-    -fsdev local,id=host_tests,path="${SCRIPT_DIR}/tests",security_model=passthrough \
-    -device virtio-9p-pci,fsdev=host_tests,mount_tag=host_tests \
+    -fsdev local,id=host_drive,path="${SCRIPT_DIR}/host_drive",security_model=passthrough \
+    -device virtio-9p-pci,fsdev=host_drive,mount_tag=host_drive \
     -nographic &
 
 VM_PID=$!
@@ -196,5 +196,10 @@ REMOTE_EOF
     log "Kernel installation commands were sent to the VM."
     log "After reboot, SSH back into the VM with: ssh -p 2222 ${SSH_USER}@localhost"
 else
+    log "Connecting via SSH to install the custom kernel..."
+    ssh -tt -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'EOF'
+    sudo mkdir -p /home/user/host_drive
+    sudo mount -t 9p -o trans=virtio host_drive /home/user/host_drive
+EOF
     log "VM is running. Connect via SSH with: ssh -p 2222 ${SSH_USER}@localhost"
 fi

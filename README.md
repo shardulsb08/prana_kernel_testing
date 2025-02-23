@@ -24,3 +24,9 @@ passwd: fedora
 
 Access VM via:
 ssh -p 2222 user@localhost
+
+## Host Directory Mapping
+The `host_drive/` directory in the project root is mapped to `/home/user/host_drive` inside the VM. It currently contains:
+- `tests/`: Test scripts and configurations.
+
+To share additional data with the VM (e.g., logs, patches), place it in `host_drive/` on the host, and access it from `/home/user/host_drive` in the VM.

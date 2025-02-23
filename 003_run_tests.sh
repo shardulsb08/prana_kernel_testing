@@ -5,7 +5,7 @@ set -euo pipefail
 VM_SSH_USER="user"          # Adjust to your VM's SSH user
 VM_SSH_PORT=2222            # Adjust to your VM's SSH port
 TEST_CONFIG="tests/test_config.txt"  # Path on host
-TESTS_DIR="/host_tests"     # Path in VM where tests/ is mounted
+TESTS_DIR="/home/user/host_drive/tests" # Path in VM where tests/ is mounted
 
 # Helper function for logging
 log() {
