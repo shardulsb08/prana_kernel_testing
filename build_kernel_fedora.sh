@@ -15,27 +15,80 @@ mkdir -p "$OUT_DIR"
 # 1. Clone the upstream kernel source if not already present
 if [ ! -d "linux" ]; then
     log "Cloning upstream kernel source from torvalds/linux.git..."
-    git clone git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
+    attempt=0
+    max_attempts=3
+    until [ $attempt -ge $max_attempts ]; do
+        if git clone git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git; then
+            break
+        else
+            attempt=$((attempt+1))
+            log "git clone attempt $attempt failed. Retrying in 5 seconds..."
+            sleep 5
+        fi
+    done
+    if [ $attempt -eq $max_attempts ]; then
+        log "Error: Failed to clone kernel source after $max_attempts attempts."
+        exit 1
+    fi
 fi
 
 cd linux
-
-# (Optional) You can add a remote for stable releases if needed:
 
 # Add the stable kernel remote if not already present
 log "Adding stable kernel remote..."
 git remote add stable git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git || true
 
 # Fetch all tags from both remotes
-log "Fetching all git tags from origin and stable remotes..."
-git fetch --tags origin
-git fetch --tags stable
+log "Fetching all git tags from origin remote..."
+attempt=0
+max_attempts=3
+until [ $attempt -ge $max_attempts ]; do
+    if git fetch --tags origin; then
+        break
+    else
+        attempt=$((attempt+1))
+        log "git fetch origin attempt $attempt failed. Retrying in 5 seconds..."
+        sleep 5
+    fi
+done
+if [ $attempt -eq $max_attempts ]; then
+    log "Error: Failed to fetch tags from origin after $max_attempts attempts."
+    exit 1
+fi
+
+log "Fetching all git tags from stable remote..."
+attempt=0
+max_attempts=3
+until [ $attempt -ge $max_attempts ]; do
+    if git fetch --tags stable; then
+        break
+    else
+        attempt=$((attempt+1))
+        log "git fetch stable attempt $attempt failed. Retrying in 5 seconds..."
+        sleep 5
+    fi
+done
+if [ $attempt -eq $max_attempts ]; then
+    log "Error: Failed to fetch tags from stable after $max_attempts attempts."
+    exit 1
+fi
 
 # Get the latest stable version from kernel.org
 log "Fetching latest stable kernel version from kernel.org..."
-LATEST_STABLE=$(curl -s https://www.kernel.org/finger_banner | grep "latest stable version" | awk '{print $NF}')
-if [ -z "$LATEST_STABLE" ]; then
-    log "Error: Unable to fetch latest stable kernel version."
+attempt=0
+max_attempts=3
+until [ $attempt -ge $max_attempts ]; do
+    LATEST_STABLE=$(curl -s https://www.kernel.org/finger_banner | grep "latest stable version" | awk '{print $NF}')
+    if [ -n "$LATEST_STABLE" ]; then
+        break
+    else
+        attempt=$((attempt+1))
+        log "curl attempt $attempt failed. Retrying in 5 seconds..."
+        sleep 5
+    fi
+done
+if [ $attempt -eq $max_attempts ]; then
+    log "Error: Failed to fetch kernel version after $max_attempts attempts."
     exit 1
 fi
 
@@ -70,7 +123,21 @@ else
     log "Fedora kernel repository already exists. Updating..."
     cd fedora_kernel
     git checkout rawhide
-    git pull
+    attempt=0
+    max_attempts=3
+    until [ $attempt -ge $max_attempts ]; do
+        if git pull; then
+            break
+        else
+            attempt=$((attempt+1))
+            log "git pull attempt $attempt failed. Retrying in 5 seconds..."
+            sleep 5
+        fi
+    done
+    if [ $attempt -eq $max_attempts ]; then
+        log "Error: Failed to pull updates for fedora_kernel after $max_attempts attempts."
+        exit 1
+    fi
     # Optional: create a unique branch with a timestamp
     # timestamp=$(date +"%Y%m%d-%H%M%S")
     # git checkout -b rawhide-$timestamp
@@ -111,23 +178,22 @@ fi
 cd linux
 
 # Fetch all tags to ensure we have the latest
-log "Fetching all git tags..."
-git fetch --tags
-
-# Get the latest stable version from kernel.org
-#log "Fetching latest stable kernel version from kernel.org..."
-#LATEST_STABLE=$(curl -s https://www.kernel.org/finger_banner | grep "latest stable version" | awk '{print $NF}')
-#if [ -z "$LATEST_STABLE" ]; then
-#    log "Error: Unable to fetch latest stable kernel version."
-#    exit 1
-#fi
-#
-## Check out the corresponding tag (e.g., v6.14.1)
-#log "Checking out kernel tag v${LATEST_STABLE}..."
-#git checkout "v${LATEST_STABLE}" || {
-#    log "Error: Failed to check out tag v${LATEST_STABLE}. It may not exist yet."
-#    exit 1
-#}
+log "Fetching all git tags from origin..."
+attempt=0
+max_attempts=3
+until [ $attempt -ge $max_attempts ]; do
+    if git fetch --tags; then
+        break
+    else
+        attempt=$((attempt+1))
+        log "git fetch attempt $attempt failed. Retrying in 5 seconds..."
+        sleep 5
+    fi
+done
+if [ $attempt -eq $max_attempts ]; then
+    log "Error: Failed to fetch tags after $max_attempts attempts."
+    exit 1
+fi
 
 # 3. Update configuration
 log "Updating kernel configuration with 'make olddefconfig'..."
@@ -136,21 +202,20 @@ make olddefconfig
 # (Optional) Uncomment the next line for interactive configuration
 # make menuconfig
 
-# 4. Build the kernel image and modules
+# 4. Build the kernel image and modules with ccache
 log "Building kernel bzImage..."
-make -j"$(nproc)" bzImage
+make CC="ccache gcc" -j"$(nproc)" bzImage
 
 log "Building kernel modules..."
-make -j"$(nproc)" modules
+make CC="ccache gcc" -j"$(nproc)" modules
 
-
-# 5. Clone or update repositories as needed...
-# (Rest of the script remains the same, but when copying the kernel image and installing modules,
-#  use $OUT_DIR instead of relative paths.)
+# 5. Copy artifacts
+OUT_DIR="/build/out/kernel_artifacts/v${LATEST_STABLE}"
+mkdir -p "$OUT_DIR"
 log "Copying kernel image (bzImage) to ${OUT_DIR}/bzImage-custom..."
 cp arch/x86/boot/bzImage "$OUT_DIR/bzImage-custom"
 
-# ... and similarly for modules_install:
+# Install modules
 log "Installing kernel modules into ${OUT_DIR}..."
 make modules_install INSTALL_MOD_PATH="$OUT_DIR"
 

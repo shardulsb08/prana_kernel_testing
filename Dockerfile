@@ -21,6 +21,7 @@ RUN dnf -y update && \
         perl \
         openssl \
         dracut \
+        ccache \
         git && \
     dnf clean all
 
