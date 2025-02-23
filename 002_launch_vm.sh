@@ -26,9 +26,15 @@ log() {
 
 # ========= Parse Command-Line Arguments =========
 INSTALL_KERNEL=false
+RUN_TESTS=false
 for arg in "$@"; do
     if [ "$arg" == "--install-kernel" ]; then
         INSTALL_KERNEL=true
+    elif [ "$arg" == "--run-tests" ]; then                                
+        RUN_TESTS=true
+    else
+        log "Unknown argument: $arg"
+        exit 1
     fi
 done
 
@@ -76,6 +82,7 @@ fi
 
 # ========= 3. Launch the QEMU VM =========
 log "Launching QEMU VM with ${RAM_MB}MB RAM and ${VCPUS} vCPUs..."
+
 qemu-system-x86_64 \
     -enable-kvm \
     -m ${RAM_MB} \
@@ -87,6 +94,8 @@ qemu-system-x86_64 \
     -net nic \
     -fsdev local,id=host_out,path="${OUT_DIR}",security_model=passthrough \
     -device virtio-9p-pci,fsdev=host_out,mount_tag=host_out \
+    -fsdev local,id=host_tests,path="${SCRIPT_DIR}/tests",security_model=passthrough \
+    -device virtio-9p-pci,fsdev=host_tests,mount_tag=host_tests \
     -nographic &
 
 VM_PID=$!
