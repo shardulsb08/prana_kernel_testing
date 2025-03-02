@@ -13,6 +13,8 @@ CLOUD_INIT_ISO="$SCRIPT_DIR/seed.iso"
 OUT_DIR="$SCRIPT_DIR/container_kernel_workspace/out"  # Directory with kernel artifacts
 SSH_USER="user"
 SSH_PASS="fedora"  # Default password (set in cloud-init)
+SSH_PORT=2222
+SSH_HOST="localhost"
 TEST_CONFIG="$SCRIPT_DIR/host_drive/tests/test_config.txt"  # Path to test config on host
 
 # VM resources
@@ -24,6 +26,34 @@ DISK_SIZE="35G"  # Disk image size
 log() {
     echo -e "\n\e[32m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
 }
+
+# Install sshpass if not present
+if ! command -v sshpass &> /dev/null; then
+    log "Installing sshpass..."
+    sudo apt-get update && sudo apt-get install -y sshpass || { log "Error: Failed to install sshpass"; exit 1; }
+fi
+
+# Custom SSH function to handle both single commands and multi-line scripts
+vm_ssh() {
+    if [ "$1" == "--script" ]; then
+        # Handle multi-line script (heredoc)
+        sshpass -p "${SSH_PASS}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" /bin/bash
+    else
+        # Handle single command
+        local cmd="$1"
+        sshpass -p "${SSH_PASS}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" "$cmd"
+    fi
+}
+
+# Example usage 1: Running a single command
+# vm_ssh "echo 'Hello from the VM!'"
+
+# Example usage 2: Running a multi-line script
+# vm_ssh --script <<'EOF'
+# echo "This is a multi-line script running on the VM"
+# sudo some_command
+# echo "Done!"
+# EOF
 
 # ========= Parse Command-Line Arguments =========
 INSTALL_KERNEL=false
@@ -102,15 +132,9 @@ if ! kill -0 $VM_PID 2>/dev/null; then
 fi
 log "VM launched (PID ${VM_PID})."
 
-# Install sshpass if not present
-if ! command -v sshpass &> /dev/null; then
-    log "Installing sshpass..."
-    sudo apt-get update && sudo apt-get install -y sshpass || { log "Error: Failed to install sshpass"; exit 1; }
-fi
-
 # Wait for Cloud-Init to complete
 log "Waiting for Cloud-Init to complete..."
-while ! sshpass -p "${SSH_PASS}" ssh -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost "test -f /var/lib/cloud/instance/boot-finished"; do
+while ! vm_ssh "test -f /var/lib/cloud/instance/boot-finished"; do
     sleep 10
 done
 log "Cloud-Init has completed."
@@ -136,7 +160,7 @@ fi
 # ========= 5. Optional: Install the Custom Kernel =========
 if [ "$INSTALL_KERNEL" == "true" ]; then
     log "Connecting via SSH to install the custom kernel..."
-    sshpass -p "${SSH_PASS}" ssh -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'REMOTE_EOF'
+    vm_ssh --script <<'REMOTE_EOF'
 set -euo pipefail
 log() {
     echo -e "\n\e[34m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
@@ -233,7 +257,7 @@ REMOTE_EOF
 
     # Mount host_drive after reboot
     log "Mounting host_drive after reboot..."
-    sshpass -p "${SSH_PASS}" ssh -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'EOF'
+    vm_ssh --script <<'EOF'
     sudo mkdir -p /home/user/host_drive
     sudo mount -t 9p -o trans=virtio host_drive /home/user/host_drive
     exit  # Ensure SSH session exits
@@ -252,7 +276,7 @@ EOF
         fi
 
         log "Triggering tests inside VM via 003_run_tests.sh..."
-        sshpass -p "${SSH_PASS}" ssh -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'TEST_EOF'
+        vm_ssh --script <<'TEST_EOF'
         set -euo pipefail
         log() {
             echo -e "\n\e[34m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
@@ -271,7 +295,7 @@ TEST_EOF
     fi
 else
     log "Connecting via SSH to mount host_drive..."
-    sshpass -p "${SSH_PASS}" ssh -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'EOF'
+    vm_ssh --script <<'EOF'
     sudo mkdir -p /home/user/host_drive
     sudo mount -t 9p -o trans=virtio host_drive /home/user/host_drive
     exit  # Ensure SSH session exits
@@ -281,7 +305,7 @@ EOF
     # Trigger tests if requested (no kernel install)
     if [ "$RUN_TESTS" == "true" ]; then
         log "Triggering tests inside VM via 003_run_tests.sh..."
-        sshpass -p "${SSH_PASS}" ssh -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'TEST_EOF'
+        vm_ssh --script <<'TEST_EOF'
         set -euo pipefail
         log() {
             echo -e "\n\e[34m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
