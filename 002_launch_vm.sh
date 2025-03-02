@@ -55,6 +55,16 @@ vm_ssh() {
 # echo "Done!"
 # EOF
 
+# Function to wait for Cloud-Init to complete
+wait_cloud_init() {
+	log "Waiting for Cloud-Init to complete..."
+	while ! vm_ssh "test -f /var/lib/cloud/instance/boot-finished"; do
+		sleep 10
+		log "Waiting for Cloud-Init to complete..."
+	done
+	log "Cloud-Init has completed."
+}
+
 # ========= Parse Command-Line Arguments =========
 INSTALL_KERNEL=false
 RUN_TESTS=false
@@ -133,11 +143,13 @@ fi
 log "VM launched (PID ${VM_PID})."
 
 # Wait for Cloud-Init to complete
-log "Waiting for Cloud-Init to complete..."
-while ! vm_ssh "test -f /var/lib/cloud/instance/boot-finished"; do
-    sleep 10
-done
-log "Cloud-Init has completed."
+#log "Waiting for Cloud-Init to complete..."
+#while ! vm_ssh "test -f /var/lib/cloud/instance/boot-finished"; do
+#    sleep 10
+#done
+#log "Cloud-Init has completed."
+# Wait for Cloud-Init to complete
+wait_cloud_init
 
 # Now proceed with SSH commands (e.g., kernel installation or tests)
 log "VM is ready. Proceeding with next steps..."
@@ -229,54 +241,56 @@ sudo reboot & exit
 exit  # Exit SSH session immediately after reboot command
 REMOTE_EOF
 
-    log "Kernel installation commands were sent to the VM."
-    log "Waiting for VM to reboot and SSH to become available..."
+log "Kernel installation commands were sent to the VM."
+log "Waiting for VM to reboot and SSH to become available..."
 
-    # Wait for SSH to go down (VM rebooting)
-    for i in {1..30}; do
-        if ! nc -z localhost 2222; then
-            log "SSH is down; VM is rebooting."
-            break
-        fi
-        sleep 2
-    done
-
-    # Wait for SSH to become available after reboot
-    for i in {1..30}; do
-        if nc -z localhost 2222; then
-            log "SSH is available after reboot."
-            break
-        fi
-        sleep 10
-    done
-
+# Wait for SSH to go down (VM rebooting)
+for i in {1..30}; do
     if ! nc -z localhost 2222; then
-        log "Error: SSH did not become available after reboot."
-        exit 1
+        log "SSH is down; VM is rebooting."
+        break
     fi
+    sleep 2
+done
 
-    # Mount host_drive after reboot
-    log "Mounting host_drive after reboot..."
-    vm_ssh --script <<'EOF'
+# Wait for Cloud-Init to complete
+wait_cloud_init
+# Wait for SSH to become available after reboot
+for i in {1..30}; do
+    if nc -z localhost 2222; then
+        log "SSH is available after reboot."
+        break
+    fi
+    sleep 10
+done
+
+if ! nc -z localhost 2222; then
+    log "Error: SSH did not become available after reboot."
+    exit 1
+fi
+
+# Mount host_drive after reboot
+log "Mounting host_drive after reboot..."
+vm_ssh --script <<'EOF'
     sudo mkdir -p /home/user/host_drive
     sudo mount -t 9p -o trans=virtio host_drive /home/user/host_drive
     exit  # Ensure SSH session exits
 EOF
 
-    # If running tests after kernel install, update test_config.txt with KVER
-    if [ "$RUN_TESTS" == "true" ]; then
-        log "Updating test_config.txt with detected kernel version $KVER for smoke_test..."
-        if [ ! -f "$TEST_CONFIG" ]; then
-            echo "smoke_test $KVER" > "$TEST_CONFIG"
-        else
-            # Preserve other tests, update or add smoke_test with KVER
-            grep -v "^smoke_test" "$TEST_CONFIG" > "$TEST_CONFIG.tmp" || true
-            echo "smoke_test $KVER" >> "$TEST_CONFIG.tmp"
-            mv "$TEST_CONFIG.tmp" "$TEST_CONFIG"
-        fi
+# If running tests after kernel install, update test_config.txt with KVER
+if [ "$RUN_TESTS" == "true" ]; then
+    log "Updating test_config.txt with detected kernel version $KVER for smoke_test..."
+    if [ ! -f "$TEST_CONFIG" ]; then
+        echo "smoke_test $KVER" > "$TEST_CONFIG"
+    else
+        # Preserve other tests, update or add smoke_test with KVER
+        grep -v "^smoke_test" "$TEST_CONFIG" > "$TEST_CONFIG.tmp" || true
+        echo "smoke_test $KVER" >> "$TEST_CONFIG.tmp"
+        mv "$TEST_CONFIG.tmp" "$TEST_CONFIG"
+    fi
 
-        log "Triggering tests inside VM via 003_run_tests.sh..."
-        vm_ssh --script <<'TEST_EOF'
+    log "Triggering tests inside VM via 003_run_tests.sh..."
+    vm_ssh --script <<'TEST_EOF'
         set -euo pipefail
         log() {
             echo -e "\n\e[34m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
