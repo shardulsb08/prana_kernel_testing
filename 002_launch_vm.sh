@@ -107,6 +107,16 @@ if ! kill -0 $VM_PID 2>/dev/null; then
 fi
 log "VM launched (PID ${VM_PID})."
 
+# Wait for Cloud-Init to complete
+log "Waiting for Cloud-Init to complete..."
+while ! ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost "test -f /var/lib/cloud/instance/boot-finished"; do
+    sleep 10
+done
+log "Cloud-Init has completed."
+
+# Now proceed with SSH commands (e.g., kernel installation or tests)
+log "VM is ready. Proceeding with next steps..."
+
 # ========= 4. Wait for SSH Access =========
 log "Waiting for SSH on port 2222..."
 for i in {1..30}; do
@@ -126,7 +136,7 @@ fi
 if [ "$INSTALL_KERNEL" == "true" ]; then
     log "Connecting via SSH to install the custom kernel..."
     ssh-keygen -f "${HOME}/.ssh/known_hosts" -R "[localhost]:2222"
-    ssh -tt -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'REMOTE_EOF'
+    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'REMOTE_EOF'
 set -euo pipefail
 log() {
     echo -e "\n\e[34m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
@@ -180,7 +190,7 @@ sudo grubby --add-kernel=/boot/vmlinuz-custom --initrd=/boot/initramfs-custom.im
     log "grubby failed; updating bootloader configuration manually..."
     sudo grub2-mkconfig -o /boot/grub2/grub.cfg
 }
-
+# Set default kernel
 DEFAULT_KERNEL=$(sudo grubby --default-kernel 2>/dev/null || echo "unknown")
 log "Current default kernel: $DEFAULT_KERNEL"
 if echo "$DEFAULT_KERNEL" | grep -q "vmlinuz-custom"; then
@@ -191,11 +201,22 @@ else
 fi
 
 log "Kernel installation complete. Rebooting to test the custom kernel..."
-sudo reboot
+sudo reboot & && exit
+exit  # Exit SSH session immediately after reboot command
 REMOTE_EOF
 
     log "Kernel installation commands were sent to the VM."
     log "Waiting for VM to reboot and SSH to become available..."
+
+
+    # Wait for SSH to go down (VM rebooting)
+    for i in {1..30}; do
+        if ! nc -z localhost 2222; then
+            log "SSH is down; VM is rebooting."
+            break
+        fi
+        sleep 2
+    done
 
     # Wait for SSH to become available after reboot
     for i in {1..30}; do
@@ -213,9 +234,10 @@ REMOTE_EOF
 
     # Mount host_drive after reboot
     log "Mounting host_drive after reboot..."
-    ssh -tt -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'EOF'
+    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'EOF'
     sudo mkdir -p /home/user/host_drive
     sudo mount -t 9p -o trans=virtio host_drive /home/user/host_drive
+    exit  # Ensure SSH session exits
 EOF
 
     # If running tests after kernel install, update test_config.txt with KVER
@@ -231,7 +253,7 @@ EOF
         fi
 
         log "Triggering tests inside VM via 003_run_tests.sh..."
-        ssh -tt -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'TEST_EOF'
+        ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'TEST_EOF'
         set -euo pipefail
         log() {
             echo -e "\n\e[34m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
@@ -250,16 +272,17 @@ TEST_EOF
     fi
 else
     log "Connecting via SSH to mount host_drive..."
-    ssh -tt -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'EOF'
+    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'EOF'
     sudo mkdir -p /home/user/host_drive
     sudo mount -t 9p -o trans=virtio host_drive /home/user/host_drive
+    exit  # Ensure SSH session exits
 EOF
     log "VM is running. Connect via SSH with: ssh -p 2222 ${SSH_USER}@localhost"
 
     # Trigger tests if requested (no kernel install)
     if [ "$RUN_TESTS" == "true" ]; then
         log "Triggering tests inside VM via 003_run_tests.sh..."
-        ssh -tt -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'TEST_EOF'
+        ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'TEST_EOF'
         set -euo pipefail
         log() {
             echo -e "\n\e[34m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
