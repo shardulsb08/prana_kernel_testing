@@ -26,6 +26,12 @@ if ! nc -z localhost $VM_SSH_PORT; then
     exit 1
 fi
 
+# Check if the test directory is mounted
+if [ ! -d "$TESTS_DIR" ]; then
+    log "Error: Test directory '$TESTS_DIR' not mounted in VM."
+    exit 1
+fi
+
 # Read test config from the VM's mounted path
 TEST_CONFIG_VM="/home/user/$TEST_CONFIG"
 if [ ! -f "$TEST_CONFIG_VM" ]; then
