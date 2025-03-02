@@ -31,7 +31,7 @@ RUN_TESTS=false
 for arg in "$@"; do
     if [ "$arg" == "--install-kernel" ]; then
         INSTALL_KERNEL=true
-    elif [ "$arg" == "--run-tests" ]; then                                
+    elif [ "$arg" == "--run-tests" ]; then
         RUN_TESTS=true
     else
         log "Unknown argument: $arg"
@@ -61,13 +61,8 @@ users:
     sudo: ALL=(ALL) NOPASSWD:ALL
     groups: wheel
     shell: /bin/bash
-    ssh_pwauth: True
     lock_passwd: false
     passwd: $(openssl passwd -6 ${SSH_PASS})
-chpasswd:
-  list: |
-    ${SSH_USER}:${SSH_PASS}
-  expire: False
 ssh_pwauth: True
 EOF
 
@@ -107,9 +102,15 @@ if ! kill -0 $VM_PID 2>/dev/null; then
 fi
 log "VM launched (PID ${VM_PID})."
 
+# Install sshpass if not present
+if ! command -v sshpass &> /dev/null; then
+    log "Installing sshpass..."
+    sudo apt-get update && sudo apt-get install -y sshpass || { log "Error: Failed to install sshpass"; exit 1; }
+fi
+
 # Wait for Cloud-Init to complete
 log "Waiting for Cloud-Init to complete..."
-while ! ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost "test -f /var/lib/cloud/instance/boot-finished"; do
+while ! sshpass -p "${SSH_PASS}" ssh -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost "test -f /var/lib/cloud/instance/boot-finished"; do
     sleep 10
 done
 log "Cloud-Init has completed."
@@ -135,8 +136,7 @@ fi
 # ========= 5. Optional: Install the Custom Kernel =========
 if [ "$INSTALL_KERNEL" == "true" ]; then
     log "Connecting via SSH to install the custom kernel..."
-    ssh-keygen -f "${HOME}/.ssh/known_hosts" -R "[localhost]:2222"
-    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'REMOTE_EOF'
+    sshpass -p "${SSH_PASS}" ssh -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'REMOTE_EOF'
 set -euo pipefail
 log() {
     echo -e "\n\e[34m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
@@ -201,13 +201,12 @@ else
 fi
 
 log "Kernel installation complete. Rebooting to test the custom kernel..."
-sudo reboot & && exit
+sudo reboot & exit
 exit  # Exit SSH session immediately after reboot command
 REMOTE_EOF
 
     log "Kernel installation commands were sent to the VM."
     log "Waiting for VM to reboot and SSH to become available..."
-
 
     # Wait for SSH to go down (VM rebooting)
     for i in {1..30}; do
@@ -234,7 +233,7 @@ REMOTE_EOF
 
     # Mount host_drive after reboot
     log "Mounting host_drive after reboot..."
-    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'EOF'
+    sshpass -p "${SSH_PASS}" ssh -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'EOF'
     sudo mkdir -p /home/user/host_drive
     sudo mount -t 9p -o trans=virtio host_drive /home/user/host_drive
     exit  # Ensure SSH session exits
@@ -253,7 +252,7 @@ EOF
         fi
 
         log "Triggering tests inside VM via 003_run_tests.sh..."
-        ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'TEST_EOF'
+        sshpass -p "${SSH_PASS}" ssh -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'TEST_EOF'
         set -euo pipefail
         log() {
             echo -e "\n\e[34m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
@@ -272,7 +271,7 @@ TEST_EOF
     fi
 else
     log "Connecting via SSH to mount host_drive..."
-    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'EOF'
+    sshpass -p "${SSH_PASS}" ssh -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'EOF'
     sudo mkdir -p /home/user/host_drive
     sudo mount -t 9p -o trans=virtio host_drive /home/user/host_drive
     exit  # Ensure SSH session exits
@@ -282,7 +281,7 @@ EOF
     # Trigger tests if requested (no kernel install)
     if [ "$RUN_TESTS" == "true" ]; then
         log "Triggering tests inside VM via 003_run_tests.sh..."
-        ssh -o BatchMode=yes -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'TEST_EOF'
+        sshpass -p "${SSH_PASS}" ssh -o StrictHostKeyChecking=no -p 2222 ${SSH_USER}@localhost <<'TEST_EOF'
         set -euo pipefail
         log() {
             echo -e "\n\e[34m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
