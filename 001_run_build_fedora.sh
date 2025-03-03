@@ -26,6 +26,12 @@ install_docker() {
     sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
     echo "Docker installed successfully."
+
+    echo "Setting up post-installation for non-root user access"
+
+    sudo groupadd docker
+    sudo usermod -aG docker $USER
+    newgrp docker
 }
 
 # Check if Docker is installed
