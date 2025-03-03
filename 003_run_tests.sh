@@ -1,11 +1,15 @@
 #!/bin/bash
 set -euo pipefail
 
+# Determine the script's directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+
+# Source common functions and variables
+source "$SCRIPT_DIR/common.sh"
+
 # Configuration
-VM_SSH_USER="user"          # Adjust to your VM's SSH user
-VM_SSH_PORT=2222            # Adjust to your VM's SSH port
-TEST_CONFIG="host_drive/tests/test_config.txt"  # Path on host (adjusted for VM context)
-TESTS_DIR="/home/user/host_drive/tests" # Path in VM where tests/ is mounted
+TEST_CONFIG="$SCRIPT_DIR/host_drive/tests/test_config.txt"  # Path on host (adjusted for VM context)
+TESTS_DIR="$SCRIPT_DIR/host_drive/tests" # Path on host where tests/ is present
 
 # Helper function for logging
 log() {
@@ -32,10 +36,9 @@ if [ ! -d "$TESTS_DIR" ]; then
     exit 1
 fi
 
-# Read test config from the VM's mounted path
-TEST_CONFIG_VM="/home/user/$TEST_CONFIG"
-if [ ! -f "$TEST_CONFIG_VM" ]; then
-    log "Error: Test configuration file '$TEST_CONFIG_VM' not found in VM."
+# Read and execute tests
+if [ ! -f "$TEST_CONFIG" ]; then
+    log "Error: Test configuration file '$TEST_CONFIG' not found on host."
     exit 1
 fi
 
@@ -45,7 +48,7 @@ while IFS=' ' read -r test_name param; do
         continue  # Skip empty lines
     fi
     log "Running test: $test_name${param:+ with parameter $param}"
-    ssh -o StrictHostKeyChecking=no -p $VM_SSH_PORT $VM_SSH_USER@localhost <<EOF
+    vm_ssh --script <<EOF
 set -euo pipefail
 case "$test_name" in
     smoke_test)

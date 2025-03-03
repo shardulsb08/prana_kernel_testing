@@ -4,6 +4,9 @@ set -euo pipefail
 # Determine the script's directory for consistent file paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
+# Source common functions and variables
+source "$SCRIPT_DIR/common.sh"
+
 # ========= Configuration Variables =========
 VM_NAME="fedora-vm"
 DISK_IMAGE="$SCRIPT_DIR/fedora_vm.qcow2"
@@ -11,10 +14,6 @@ CLOUD_IMAGE="$SCRIPT_DIR/Fedora-Cloud-Base-38-1.6.x86_64.qcow2"
 CLOUD_IMAGE_URL="https://download.fedoraproject.org/pub/fedora/linux/releases/38/Cloud/x86_64/images/${CLOUD_IMAGE##*/}"
 CLOUD_INIT_ISO="$SCRIPT_DIR/seed.iso"
 OUT_DIR="$SCRIPT_DIR/container_kernel_workspace/out"  # Directory with kernel artifacts
-SSH_USER="user"
-SSH_PASS="fedora"  # Default password (set in cloud-init)
-SSH_PORT=2222
-SSH_HOST="localhost"
 TEST_CONFIG="$SCRIPT_DIR/host_drive/tests/test_config.txt"  # Path to test config on host
 
 # VM resources
@@ -23,27 +22,13 @@ VCPUS=16      # 16 vCPUs
 DISK_SIZE="35G"  # Disk image size
 
 # ========= Helper Functions =========
-log() {
-    echo -e "\n\e[32m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
-}
+# Empty right now.
 
 # Install sshpass if not present
 if ! command -v sshpass &> /dev/null; then
     log "Installing sshpass..."
     sudo apt-get update && sudo apt-get install -y sshpass || { log "Error: Failed to install sshpass"; exit 1; }
 fi
-
-# Custom SSH function to handle both single commands and multi-line scripts
-vm_ssh() {
-    if [ "$1" == "--script" ]; then
-        # Handle multi-line script (heredoc)
-        sshpass -p "${SSH_PASS}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" /bin/bash
-    else
-        # Handle single command
-        local cmd="$1"
-        sshpass -p "${SSH_PASS}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" "$cmd"
-    fi
-}
 
 # Example usage 1: Running a single command
 # vm_ssh "echo 'Hello from the VM!'"
