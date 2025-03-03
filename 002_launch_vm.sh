@@ -244,103 +244,79 @@ sudo reboot & exit
 exit  # Exit SSH session immediately after reboot command
 REMOTE_EOF
 
-# Read KVER from the file on the host
-KVER=$(cat "$OUT_DIR/kver.txt")
-log "Kernel version detected: $KVER"
+    # Read KVER from the file on the host
+    KVER=$(cat "$OUT_DIR/kver.txt")
+    log "Kernel version detected: $KVER"
 
-log "Kernel installation commands were sent to the VM."
-log "Waiting for VM to reboot and SSH to become available..."
+    log "Kernel installation commands were sent to the VM."
+    log "Waiting for VM to reboot and SSH to become available..."
 
-# Wait for SSH to go down (VM rebooting)
-for i in {1..30}; do
+    # Wait for SSH to go down (VM rebooting)
+    for i in {1..30}; do
+        if ! nc -z localhost 2222; then
+            log "SSH is down; VM is rebooting."
+            break
+        fi
+        sleep 2
+    done
+
+    # Wait for Cloud-Init to complete
+    wait_cloud_init
+    # Wait for SSH to become available after reboot
+    for i in {1..30}; do
+        if nc -z localhost 2222; then
+            log "SSH is available after reboot."
+            break
+        fi
+        sleep 10
+    done
+
     if ! nc -z localhost 2222; then
-        log "SSH is down; VM is rebooting."
-        break
+        log "Error: SSH did not become available after reboot."
+        exit 1
     fi
-    sleep 2
-done
 
-# Wait for Cloud-Init to complete
-wait_cloud_init
-# Wait for SSH to become available after reboot
-for i in {1..30}; do
-    if nc -z localhost 2222; then
-        log "SSH is available after reboot."
-        break
-    fi
-    sleep 10
-done
-
-if ! nc -z localhost 2222; then
-    log "Error: SSH did not become available after reboot."
-    exit 1
-fi
-
-# Mount host_drive after reboot
-log "Mounting host_drive after reboot..."
-vm_ssh --script <<'EOF'
-    sudo mkdir -p /home/user/host_drive
-    sudo mount -t 9p -o trans=virtio host_drive /home/user/host_drive
-    exit  # Ensure SSH session exits
+    # Mount host_drive after reboot
+    log "Mounting host_drive after reboot..."
+    vm_ssh --script <<'EOF'
+        sudo mkdir -p /home/user/host_drive
+        sudo mount -t 9p -o trans=virtio host_drive /home/user/host_drive
+        exit  # Ensure SSH session exits
 EOF
 
-# If running tests after kernel install, update test_config.txt with KVER
-if [ "$RUN_TESTS" == "true" ]; then
-    log "Updating test_config.txt with detected kernel version $KVER for smoke_test..."
-    if [ ! -f "$TEST_CONFIG" ]; then
-        echo "smoke_test $KVER" > "$TEST_CONFIG"
-    else
-        # Preserve other tests, update or add smoke_test with KVER
-        grep -v "^smoke_test" "$TEST_CONFIG" > "$TEST_CONFIG.tmp" || true
-        echo "smoke_test $KVER" >> "$TEST_CONFIG.tmp"
-        mv "$TEST_CONFIG.tmp" "$TEST_CONFIG"
-    fi
-
-    log "Triggering tests inside VM via 003_run_tests.sh..."
-    vm_ssh --script <<'TEST_EOF'
-        set -euo pipefail
-        log() {
-            echo -e "\n\e[34m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
-        }
-        log "Running 003_run_tests.sh inside VM..."
-        chmod +x /home/user/host_drive/003_run_tests.sh
-        /home/user/host_drive/003_run_tests.sh || {
-            log "Error: Test execution failed inside VM."
-            exit 1
-        }
-TEST_EOF
-        if [ $? -ne 0 ]; then
-            log "Error: Failed to run tests inside VM."
-            exit 1
+    # If running tests after kernel install, update test_config.txt with KVER
+    if [ "$RUN_TESTS" == "true" ]; then
+        log "Updating test_config.txt with detected kernel version $KVER for smoke_test..."
+        if [ ! -f "$TEST_CONFIG" ]; then
+            echo "smoke_test $KVER" > "$TEST_CONFIG"
+        else
+            # Preserve other tests, update or add smoke_test with KVER
+            grep -v "^smoke_test" "$TEST_CONFIG" > "$TEST_CONFIG.tmp" || true
+            echo "smoke_test $KVER" >> "$TEST_CONFIG.tmp"
+            mv "$TEST_CONFIG.tmp" "$TEST_CONFIG"
         fi
-    fi
-else
-    log "Connecting via SSH to mount host_drive..."
-    vm_ssh --script <<'EOF'
-    sudo mkdir -p /home/user/host_drive
-    sudo mount -t 9p -o trans=virtio host_drive /home/user/host_drive
-    exit  # Ensure SSH session exits
+
+	log "Running 003_run_tests.sh on the host..."
+        bash "$SCRIPT_DIR/003_run_tests.sh" || {
+            log "Error: Test execution failed on the host."
+            exit 1
+        }
+        fi
+    else
+        log "Connecting via SSH to mount host_drive..."
+        vm_ssh --script <<'EOF'
+        sudo mkdir -p /home/user/host_drive
+        sudo mount -t 9p -o trans=virtio host_drive /home/user/host_drive
+        exit  # Ensure SSH session exits
 EOF
     log "VM is running. Connect via SSH with: ssh -p 2222 ${SSH_USER}@localhost"
 
     # Trigger tests if requested (no kernel install)
     if [ "$RUN_TESTS" == "true" ]; then
-        log "Triggering tests inside VM via 003_run_tests.sh..."
-        vm_ssh --script <<'TEST_EOF'
-        set -euo pipefail
-        log() {
-            echo -e "\n\e[34m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
-        }
-        log "Running 003_run_tests.sh inside VM..."
-        chmod +x /home/user/host_drive/003_run_tests.sh
-        /home/user/host_drive/003_run_tests.sh || {
-            log "Error: Test execution failed inside VM."
-            exit 1
-        }
-TEST_EOF
-        if [ $? -ne 0 ]; then
-            log "Error: Failed to run tests inside VM."
-            exit 1
-        fi
+        log "Running 003_run_tests.sh on the host..."
+        bash "$SCRIPT_DIR/003_run_tests.sh" || {
+            log "Error: Test execution failed on the host."
+        exit 1
+    }
     fi
 fi
