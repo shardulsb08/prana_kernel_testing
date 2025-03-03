@@ -193,6 +193,9 @@ if [ -z "$KVER" ]; then
 fi
 log "Detected custom kernel version: $KVER"
 
+# Write KVER to a file in the shared folder
+echo "$KVER" > /host_out/kver.txt
+
 ARTIFACT_DIR="/host_out/kernel_artifacts/v${KVER}"
 if [ ! -f "${ARTIFACT_DIR}/bzImage-custom" ]; then
     log "Error: Kernel image not found at ${ARTIFACT_DIR}/bzImage-custom"
@@ -240,6 +243,10 @@ log "Kernel installation complete. Rebooting to test the custom kernel..."
 sudo reboot & exit
 exit  # Exit SSH session immediately after reboot command
 REMOTE_EOF
+
+# Read KVER from the file on the host
+KVER=$(cat "$OUT_DIR/kver.txt")
+log "Kernel version detected: $KVER"
 
 log "Kernel installation commands were sent to the VM."
 log "Waiting for VM to reboot and SSH to become available..."
