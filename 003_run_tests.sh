@@ -10,6 +10,7 @@ source "$SCRIPT_DIR/common.sh"
 # Configuration
 TEST_CONFIG="$SCRIPT_DIR/host_drive/tests/test_config.txt"  # Path on host (adjusted for VM context)
 TESTS_DIR="$SCRIPT_DIR/host_drive/tests" # Path on host where tests/ is present
+VM_TESTS_DIR="/home/user/host_drive/tests" # Path on host where tests/ is present
 
 # Helper function for logging
 log() {
@@ -52,8 +53,8 @@ while IFS=' ' read -r test_name param; do
 set -euo pipefail
 case "$test_name" in
     smoke_test)
-        chmod +x $TESTS_DIR/001_kernel_smoke_test.sh
-        $TESTS_DIR/001_kernel_smoke_test.sh${param:+ "$param"}
+        chmod +x $VM_TESTS_DIR/001_kernel_smoke_test.sh
+        $VM_TESTS_DIR/001_kernel_smoke_test.sh${param:+ "$param"}
         ;;
     *)
         echo "Unknown test: $test_name"
@@ -65,6 +66,6 @@ EOF
         log "Test '$test_name' failed."
         exit 1
     fi
-done < "$TEST_CONFIG_VM"
+done < "$TEST_CONFIG"
 
 log "All selected tests passed."
