@@ -40,16 +40,6 @@ fi
 # echo "Done!"
 # EOF
 
-# Function to wait for Cloud-Init to complete
-wait_cloud_init() {
-	log "Waiting for Cloud-Init to complete..."
-	while ! vm_ssh "test -f /var/lib/cloud/instance/boot-finished"; do
-		sleep 10
-		log "Waiting for Cloud-Init to complete..."
-	done
-	log "Cloud-Init has completed."
-}
-
 # ========= Parse Command-Line Arguments =========
 INSTALL_KERNEL=false
 RUN_TESTS=false
