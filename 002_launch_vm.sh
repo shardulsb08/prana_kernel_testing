@@ -66,11 +66,19 @@ if [ ! -f "$DISK_IMAGE" ]; then
 fi
 
 # ========= 2. Create Cloud-Init ISO =========
-if [ ! -f "$CLOUD_INIT_ISO" ]; then
-    log "Creating cloud-init ISO for initial VM configuration..."
-    mkdir -p "$SCRIPT_DIR/cloudinit"
-    cat > "$SCRIPT_DIR/cloudinit/user-data" <<EOF
+log "Checking if cloud-init configuration has changed..."
+
+# Define paths for configuration files
+USER_DATA_FILE="$SCRIPT_DIR/cloudinit/user-data"
+META_DATA_FILE="$SCRIPT_DIR/cloudinit/meta-data"
+CHECKSUM_FILE="$SCRIPT_DIR/checksums.txt"  # Store checksum outside cloudinit dir to persist after cleanup
+
+# Create temporary configuration files
+mkdir -p "$SCRIPT_DIR/cloudinit"
+
+cat > "$USER_DATA_FILE" <<EOF
 #cloud-config
+#Auto-generated from 002_launch_vm.sh
 users:
   - name: ${SSH_USER}
     sudo: ALL=(ALL) NOPASSWD:ALL
@@ -79,17 +87,39 @@ users:
     lock_passwd: false
     passwd: $(openssl passwd -6 ${SSH_PASS})
 ssh_pwauth: True
+packages:
+  - stress-ng
 EOF
 
-    cat > "$SCRIPT_DIR/cloudinit/meta-data" <<EOF
+cat > "$META_DATA_FILE" <<EOF
+#Auto-generated from 002_launch_vm.sh
 instance-id: ${VM_NAME}
 local-hostname: ${VM_NAME}
 EOF
 
-    genisoimage -output "${CLOUD_INIT_ISO}" -volid cidata -joliet -rock "$SCRIPT_DIR/cloudinit/user-data" "$SCRIPT_DIR/cloudinit/meta-data" \
+# Calculate current checksum of configuration files
+CURRENT_CHECKSUM=$(sha256sum "$USER_DATA_FILE" "$META_DATA_FILE" | sha256sum | cut -d' ' -f1)
+
+# Check if checksum file exists and compare
+if [ -f "$CHECKSUM_FILE" ]; then
+    STORED_CHECKSUM=$(cat "$CHECKSUM_FILE")
+    if [ "$CURRENT_CHECKSUM" == "$STORED_CHECKSUM" ]; then
+        log "No changes detected in cloud-init configuration. Using existing seed.iso."
+    else
+        log "Changes detected in cloud-init configuration. Regenerating seed.iso..."
+        genisoimage -output "${CLOUD_INIT_ISO}" -volid cidata -joliet -rock "$USER_DATA_FILE" "$META_DATA_FILE" \
+            || { log "Error creating cloud-init ISO"; exit 1; }
+        echo "$CURRENT_CHECKSUM" > "$CHECKSUM_FILE"
+    fi
+else
+    log "No previous checksum found. Generating seed.iso..."
+    genisoimage -output "${CLOUD_INIT_ISO}" -volid cidata -joliet -rock "$USER_DATA_FILE" "$META_DATA_FILE" \
         || { log "Error creating cloud-init ISO"; exit 1; }
-    rm -rf "$SCRIPT_DIR/cloudinit"
+    echo "$CURRENT_CHECKSUM" > "$CHECKSUM_FILE"
 fi
+
+# Clean up temporary files
+rm -rf "$SCRIPT_DIR/cloudinit"
 
 # ========= 3. Launch the QEMU VM =========
 log "Launching QEMU VM with ${RAM_MB}MB RAM and ${VCPUS} vCPUs..."
