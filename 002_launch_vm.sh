@@ -71,7 +71,7 @@ log "Checking if cloud-init configuration has changed..."
 # Define paths for configuration files
 USER_DATA_FILE="$SCRIPT_DIR/cloudinit/user-data"
 META_DATA_FILE="$SCRIPT_DIR/cloudinit/meta-data"
-CHECKSUM_FILE="$SCRIPT_DIR/checksums.txt"  # Store checksum outside cloudinit dir to persist after cleanup
+CHECKSUM_FILE="$SCRIPT_DIR/cloud_init_checksums.txt"  # Store checksum outside cloudinit dir to persist after cleanup
 
 # Create temporary configuration files
 mkdir -p "$SCRIPT_DIR/cloudinit"
