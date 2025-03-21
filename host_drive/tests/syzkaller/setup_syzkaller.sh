@@ -17,7 +17,7 @@ if ! command -v docker &> /dev/null; then
     curl -fsSL https://get.docker.com -o get-docker.sh
     sudo sh get-docker.sh
     rm get-docker.sh
-    echo "Docker installed. Note: You may need to add your user to the 'docker' group or run this script with sudo if permission issues occur."
+    echo "Docker installed. Note: You may need to add your user to the 'docker' group or run with sudo if permission issues occur."
 else
     echo "Docker is already installed."
 fi
@@ -30,9 +30,9 @@ else
     echo "Syzkaller repository already exists at $SYZKALLER_DIR"
 fi
 
-# Build Syzkaller using syz-env
+# Build Syzkaller using syz-env with a pseudo-TTY
 echo "Building Syzkaller with syz-env..."
 cd "$SYZKALLER_DIR"
-./tools/syz-env make
+script -c "./tools/syz-env make" /dev/null
 
 echo "Syzkaller installed successfully at $SYZKALLER_DIR"
