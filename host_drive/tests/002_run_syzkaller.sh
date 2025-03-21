@@ -36,11 +36,14 @@ cat > "$SYZKALLER_CONFIG" <<EOF
     "kernel_obj": "$KERNEL_BUILD_DIR",
     "syzkaller": "$SYZKALLER_BIN_DIR",
     "procs": 8,
-    "type": "ssh",
-    "ssh": {
-        "addr": "localhost:2222",
-        "user": "$SSH_USER",
-        "key": "$SSH_KEY"
+    "vm": {
+        "count": 1,
+        "type": "ssh",
+        "ssh": {
+            "addr": "localhost:2222",
+            "user": "$SSH_USER",
+            "key": "$SSH_KEY"
+        }
     }
 }
 EOF
