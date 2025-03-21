@@ -31,7 +31,7 @@ if ! nc -z localhost $VM_SSH_PORT; then
     exit 1
 fi
 
-# Check if the test directory is mounted
+# Check if the test directory exists
 if [ ! -d "$TESTS_DIR" ]; then
     log "Error: Test directory '$TESTS_DIR' not mounted in VM."
     exit 1
@@ -56,12 +56,38 @@ case "$test_name" in
         chmod +x $VM_TESTS_DIR/001_kernel_smoke_test.sh
         $VM_TESTS_DIR/001_kernel_smoke_test.sh${param:+ "$param"}
         ;;
-    *)
-        echo "Unknown test: $test_name"
-        exit 1
-        ;;
 esac
 EOF
+    if [ $? -ne 0 ]; then
+        log "Test '$test_name' failed."
+        exit 1
+    fi
+done < "$TEST_CONFIG"
+
+# Parse each line of test_config.txt, allowing optional parameters
+while IFS=' ' read -r test_name param; do
+    if [ -z "$test_name" ]; then
+        continue  # Skip empty lines
+    fi
+set -euo pipefail
+case "$test_name" in
+    syzkaller)
+        chmod +x $TESTS_DIR/002_run_syzkaller.sh
+        chmod +x $TESTS_DIR/syzkaller/setup_syzkaller.sh
+        KVER="$(<./container_kernel_workspace/out/kver.txt)"
+        ARTIFACT_DIR="$OUT_DIR/kernel_artifacts/v${KVER}" 
+        if [ ! -f "${ARTIFACT_DIR}/bzImage-custom" ]; then
+            log "Error: Kernel image not found at ${ARTIFACT_DIR}/bzImage-custom"
+            exit 1
+        fi
+        "$TESTS_DIR/syzkaller/setup_syzkaller.sh"
+        cp -r "${ARTIFACT_DIR}" "$TESTS_DIR/syzkaller/"
+        
+        $TESTS_DIR/002_run_syzkaller.sh${param:+ "$param"}
+        echo "Starting Syzkaller..."
+        "$SCRIPT_DIR/run_syzkaller.sh" &
+        ;;
+esac
     if [ $? -ne 0 ]; then
         log "Test '$test_name' failed."
         exit 1

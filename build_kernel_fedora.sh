@@ -202,6 +202,12 @@ make olddefconfig
 # (Optional) Uncomment the next line for interactive configuration
 # make menuconfig
 
+# Enable Syzkaller-required options
+#scripts/config --file .config --enable CONFIG_KCOV
+#scripts/config --file .config --enable CONFIG_DEBUG_INFO
+# Optional: Enable KASAN for memory error detection
+#scripts/config --file .config --enable CONFIG_KASAN
+
 # 4. Build the kernel image and modules with ccache
 log "Building kernel bzImage..."
 make CC="ccache gcc" -j"$(nproc)" bzImage

@@ -1,10 +1,16 @@
 #!/bin/bash
 
 # Common configuration variables
+
+# Determine the script's directory for consistent file paths
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+
 SSH_USER="user"
 SSH_PASS="fedora"    # Default password (set in cloud-init)
 VM_SSH_PORT=2222
 SSH_HOST="localhost"
+
+OUT_DIR="$SCRIPT_DIR/container_kernel_workspace/out"  # Directory with kernel artifacts
 
 # Helper function for logging
 log() {

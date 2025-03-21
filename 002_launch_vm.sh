@@ -16,6 +16,20 @@ CLOUD_INIT_ISO="$SCRIPT_DIR/seed.iso"
 OUT_DIR="$SCRIPT_DIR/container_kernel_workspace/out"  # Directory with kernel artifacts
 TEST_CONFIG="$SCRIPT_DIR/host_drive/tests/test_config.txt"  # Path to test config on host
 
+# Syzkaller setup
+TEST_DIR="$SCRIPT_DIR/host_drive/tests"
+SYZKALLER_DIR="$TEST_DIR/syzkaller"
+SYZKALLER_BIN_DIR="$TEST_DIR/syzkaller/syzkaller"
+SYZKALLER_SSH_KEY="$SYZKALLER_DIR/.ssh/syzkaller_id_rsa"
+
+# Generate SSH key if not exists
+if [ ! -f "$SYZKALLER_SSH_KEY" ]; then
+    mkdir -p "$SYZKALLER_DIR/.ssh"
+    echo "Generating SSH key pair for Syzkaller..."
+    ssh-keygen -t rsa -b 4096 -f "$SYZKALLER_SSH_KEY" -N ""
+fi
+PUBLIC_KEY=$(cat "$SYZKALLER_SSH_KEY.pub")
+
 # VM resources
 RAM_MB=20480  # 20GB RAM
 VCPUS=16      # 16 vCPUs
@@ -86,6 +100,8 @@ users:
     shell: /bin/bash
     lock_passwd: false
     passwd: $(openssl passwd -6 ${SSH_PASS})
+    ssh_authorized_keys:
+      - $PUBLIC_KEY
 ssh_pwauth: True
 packages:
   - stress-ng
@@ -325,3 +341,5 @@ EOF
     }
     fi
 fi
+
+echo "VM is running. SSH: ssh -i $SYZKALLER_SSH_KEY -p 2222 $SSH_USER@localhost"
