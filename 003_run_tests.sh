@@ -43,16 +43,25 @@ if [ ! -f "$TEST_CONFIG" ]; then
     exit 1
 fi
 
-# Parse each line of test_config.txt, allowing optional parameters
+# Add tests with lower chances of crash (loss of VM access) in the first
+# loop, since it runs inside the VM. The others, add them in the second
+# loop. This runs from the host machine.
+# Fyi, if we exchange loop positions, we risk skipping the tests inside
+# VM, even though they could have been run beforehand successfully.
+
+# Parse each line of test_config.txt from VM, allowing optional parameters
 while IFS=' ' read -r test_name param; do
     if [ -z "$test_name" ]; then
         continue  # Skip empty lines
     fi
-    log "Running test: $test_name${param:+ with parameter $param}"
     vm_ssh --script <<EOF
 set -euo pipefail
 case "$test_name" in
     smoke_test)
+        log() {
+            echo -e "\n\e[34m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
+        }
+        log "Running test: $test_name${param:+ with parameter $param}"
         chmod +x $VM_TESTS_DIR/001_kernel_smoke_test.sh
         $VM_TESTS_DIR/001_kernel_smoke_test.sh${param:+ "$param"}
         ;;
@@ -64,7 +73,7 @@ EOF
     fi
 done < "$TEST_CONFIG"
 
-# Parse each line of test_config.txt, allowing optional parameters
+# Parse each line of test_config.txt from host, allowing optional parameters
 while IFS=' ' read -r test_name param; do
     if [ -z "$test_name" ]; then
         continue  # Skip empty lines
@@ -87,8 +96,13 @@ case "$test_name" in
 
 #Prepare VM for secure SSH access
         vm_ssh -- script <<SECURE_SSH
+set -euo pipefail
+
 #!/bin/bash
 
+log() {
+    echo -e "\n\e[34m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
+}
 # Ensure SSH server is installed
 sudo dnf -y update
 sudo dnf -y install openssh-server
