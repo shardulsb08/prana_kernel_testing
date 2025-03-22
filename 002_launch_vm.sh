@@ -239,29 +239,30 @@ log "Root filesystem UUID: $ROOT_UUID"
 log "Remounting /boot as read-write..."
 sudo mount -o remount,rw /boot || { log "Failed to remount /boot as read-write"; exit 1; }
 
-log "Copying new kernel image to /boot/vmlinuz-custom..."
-sudo cp "${ARTIFACT_DIR}/bzImage-custom" /boot/vmlinuz-custom || { log "Failed to copy kernel image"; exit 1; }
+log "Copying new kernel image to /boot/vmlinuz-${KVER}..."
+sudo cp "${ARTIFACT_DIR}/vmlinuz-${KVER}" "/boot/vmlinuz-${KVER}" || { log "Failed to copy kernel image"; exit 1; }
+sudo cp "${ARTIFACT_DIR}/config-${KVER}" "/boot/config-${KVER}" || { log "Failed to copy config"; exit 1; }
 
 log "Installing kernel modules..."
 sudo mkdir -p /lib/modules/$KVER
-sudo cp -r "${ARTIFACT_DIR}/lib/modules/$KVER/"* /lib/modules/$KVER/ || { log "Failed to copy kernel modules"; exit 1; }
+sudo cp -r "${ARTIFACT_DIR}/lib/modules/$KVER/"* "/lib/modules/$KVER/" || { log "Failed to copy kernel modules"; exit 1; }
 
 log "Generating initramfs for the new kernel..."
-sudo dracut -f --add-drivers "virtio_blk virtio_pci" /boot/initramfs-custom.img $KVER || { log "dracut failed"; exit 1; }
+sudo dracut -f --add-drivers "virtio_blk virtio_pci" "/boot/initramfs-${KVER}.img" $KVER || { log "dracut failed"; exit 1; }
 
 log "Adding new kernel entry to bootloader with boot parameters using UUID..."
-sudo grubby --add-kernel=/boot/vmlinuz-custom --initrd=/boot/initramfs-custom.img --title="Custom Kernel $KVER" --args="root=UUID=$ROOT_UUID rootflags=subvol=root console=ttyS0" --make-default || {
+sudo grubby --add-kernel="/boot/vmlinuz-${KVER}" --initrd="/boot/initramfs-${KVER}.img" --title="Custom Kernel $KVER" --args="root=UUID=$ROOT_UUID rootflags=subvol=root console=ttyS0" --make-default || {
     log "grubby failed; updating bootloader configuration manually..."
     sudo grub2-mkconfig -o /boot/grub2/grub.cfg
 }
 # Set default kernel
 DEFAULT_KERNEL=$(sudo grubby --default-kernel 2>/dev/null || echo "unknown")
 log "Current default kernel: $DEFAULT_KERNEL"
-if echo "$DEFAULT_KERNEL" | grep -q "vmlinuz-custom"; then
+if echo "$DEFAULT_KERNEL" | grep -q "vmlinuz-${KVER}"; then
     log "Custom kernel is now set as the default."
 else
     log "Custom kernel not set as default. Setting manually..."
-    sudo grubby --set-default=/boot/vmlinuz-custom
+    sudo grubby --set-default="/boot/vmlinuz-${KVER}"
 fi
 
 log "Kernel installation complete. Rebooting to test the custom kernel..."
