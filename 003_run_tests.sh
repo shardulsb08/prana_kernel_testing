@@ -85,7 +85,7 @@ case "$test_name" in
         chmod +x $TESTS_DIR/syzkaller/setup_syzkaller.sh
         KVER="$(<./container_kernel_workspace/out/kver.txt)"
         ARTIFACT_DIR="$OUT_DIR/kernel_artifacts/v${KVER}" 
-        if [ ! -f "${ARTIFACT_DIR}/bzImage-custom" ]; then
+        if [ ! -f "${ARTIFACT_DIR}/vmlinuz-${KVER}" ]; then
             log "Error: Kernel image not found at ${ARTIFACT_DIR}/bzImage-custom"
             exit 1
         fi

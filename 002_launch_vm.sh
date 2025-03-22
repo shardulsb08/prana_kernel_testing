@@ -227,8 +227,8 @@ log "Detected custom kernel version: $KVER"
 echo "$KVER" > /host_out/kver.txt
 
 ARTIFACT_DIR="/host_out/kernel_artifacts/v${KVER}"
-if [ ! -f "${ARTIFACT_DIR}/bzImage-custom" ]; then
-    log "Error: Kernel image not found at ${ARTIFACT_DIR}/bzImage-custom"
+if [ ! -f "${ARTIFACT_DIR}/vmlinuz-${KVER}" ]; then
+    log "Error: Kernel image not found at ${ARTIFACT_DIR}/vmlinuz-${KVER}"
     exit 1
 fi
 
