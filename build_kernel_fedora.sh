@@ -208,6 +208,15 @@ make olddefconfig
 # Optional: Enable KASAN for memory error detection
 #scripts/config --file .config --enable CONFIG_KASAN
 
+# Embed the config in the kernel image.
+scripts/config --file .config --enable CONFIG_IKCONFIG
+# Make the config available as /proc/config.gz
+scripts/config --file .config --enable CONFIG_IKCONFIG_PROC
+
+# 3. Update configuration
+log "Updating kernel configuration with 'make olddefconfig'..."
+make olddefconfig
+
 # 4. Build the kernel image and modules with ccache
 log "Building kernel bzImage..."
 make CC="ccache gcc" -j"$(nproc)" bzImage
@@ -219,7 +228,8 @@ make CC="ccache gcc" -j"$(nproc)" modules
 OUT_DIR="/build/out/kernel_artifacts/v${LATEST_STABLE}"
 mkdir -p "$OUT_DIR"
 log "Copying kernel image (bzImage) to ${OUT_DIR}/bzImage-custom..."
-cp arch/x86/boot/bzImage "$OUT_DIR/bzImage-custom"
+cp arch/x86/boot/bzImage "$OUT_DIR/vmlinuz-${LATEST_STABLE}"
+cp .config "$OUT_DIR/config-${LATEST_STABLE}"
 
 # Install modules
 log "Installing kernel modules into ${OUT_DIR}..."
