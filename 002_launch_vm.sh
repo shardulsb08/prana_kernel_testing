@@ -27,6 +27,10 @@ if [ ! -f "$SYZKALLER_SSH_KEY" ]; then
     mkdir -p "$SYZKALLER_DIR/.ssh"
     echo "Generating SSH key pair for Syzkaller..."
     ssh-keygen -t rsa -b 4096 -f "$SYZKALLER_SSH_KEY" -N ""
+    chmod 600 $SYZKALLER_SSH_KEY
+    # Output the public key to copy to the VM
+    echo "Public key to add to VM's /root/.ssh/authorized_keys:"
+    cat "${SYZKALLER_SSH_KEY}.pub"
 fi
 PUBLIC_KEY=$(cat "$SYZKALLER_SSH_KEY.pub")
 
