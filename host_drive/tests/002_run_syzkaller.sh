@@ -8,10 +8,32 @@ TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 SYZKALLER_BIN_DIR="$TEST_DIR/syzkaller/syzkaller"
 SYZKALLER_DIR="$TEST_DIR/syzkaller"
 SYZKALLER_CONFIG="$SYZKALLER_BIN_DIR/syzkaller.cfg"
-KERNEL_BUILD_DIR="$SYZKALLER_DIR/kernel_build"
 SSH_KEY="$SYZKALLER_DIR/.ssh/syzkaller_id_rsa"
 SSH_USER="user"
 SSH_PASS="fedora"
+
+# Initialize KVER to an empty value
+KVER=""
+
+# Parse command-line arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --kernel-dir)
+            # If the --kernel-dir flag is passed, store the value in KVER
+            KVER="$2"
+            shift 2
+            ;;
+        *)
+            # Process other arguments (you can add more cases if needed)
+            shift
+            ;;
+    esac
+done
+
+KERNEL_BUILD_DIR="$SYZKALLER_DIR/kernel_build/v$KVER"
+
+# Optionally print KVER to verify it's set
+echo "Kernel directory is set to: $KVER"
 
 # Ensure workdir exists
 mkdir -p "$SYZKALLER_DIR/syzkaller_workdir"
@@ -36,14 +58,13 @@ cat > "$SYZKALLER_CONFIG" <<EOF
     "kernel_obj": "$KERNEL_BUILD_DIR",
     "syzkaller": "$SYZKALLER_BIN_DIR",
     "procs": 8,
+    "type": "isolated",
+    "sshkey": "$SSH_KEY",
+    "ssh_user": "user",
     "vm": {
-        "count": 1,
-        "type": "ssh",
-        "ssh": {
-            "addr": "localhost:2222",
-            "user": "$SSH_USER",
-            "key": "$SSH_KEY"
-        }
+        "targets": ["localhost:2222"],
+        "target_dir": "/tmp/syzkaller",
+        "target_reboot": false
     }
 }
 EOF

@@ -80,12 +80,37 @@ case "$test_name" in
             log "Error: Kernel image not found at ${ARTIFACT_DIR}/bzImage-custom"
             exit 1
         fi
-        "$TESTS_DIR/syzkaller/setup_syzkaller.sh"
-        cp -r "${ARTIFACT_DIR}" "$TESTS_DIR/syzkaller/"
-        
-        $TESTS_DIR/002_run_syzkaller.sh${param:+ "$param"}
+#        "$TESTS_DIR/syzkaller/setup_syzkaller.sh"
+        mkdir -p "$TESTS_DIR/syzkaller/kernel_build/v${KVER}/"
+        cp -r "${ARTIFACT_DIR}" "$TESTS_DIR/syzkaller/kernel_build/v${KVER}/"
+        cp "${OUT_DIR}/../linux/vmlinux" "$TESTS_DIR/syzkaller/kernel_build/v${KVER}/"
+
+#Prepare VM for secure SSH access
+        vm_ssh -- script <<SECURE_SSH
+#!/bin/bash
+
+# Ensure SSH server is installed
+sudo dnf -y update
+sudo dnf -y install openssh-server
+
+## Create .ssh directory for root if it doesn’t exist
+#sudo mkdir -p /root/.ssh
+#sudo chmod 700 /root/.ssh
+#
+## Add the public key to authorized_keys (replace <PUBLIC_KEY> with the key from Step 1)
+#sudo echo "<PUBLIC_KEY>" >> /root/.ssh/authorized_keys
+#sudo chmod 600 /root/.ssh/authorized_keys
+#sudo chown root:root /root/.ssh /root/.ssh/authorized_keys
+
+# Configure SSH to allow root login with keys only
+sudo sed -i 's/#PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
+sudo sed -i 's/PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
+
+# Restart SSH service to apply changes
+sudo systemctl restart sshd
+SECURE_SSH
         echo "Starting Syzkaller..."
-        "$SCRIPT_DIR/run_syzkaller.sh" &
+        $TESTS_DIR/002_run_syzkaller.sh ${param:+ "$param"} --kernel-dir "$KVER"
         ;;
 esac
     if [ $? -ne 0 ]; then
