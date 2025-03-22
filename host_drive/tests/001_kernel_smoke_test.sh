@@ -14,11 +14,15 @@ else
     log "No kernel version specified; skipping version check."
 fi
 
-log "Checking loaded modules..."
-lsmod | grep -q "virtio_blk" || {
-    log "Error: virtio_blk module not loaded"
+log "Checking if virtio_blk is available (built-in or loaded as module)..."
+if zcat /proc/config.gz | grep -q "CONFIG_VIRTIO_BLK=y"; then
+    log "virtio_blk is built-in"
+elif lsmod | grep -q "virtio_blk"; then
+    log "virtio_blk module is loaded"
+else
+    log "Error: virtio_blk is neither built-in nor loaded as a module"
     exit 1
-}
+fi
 
 #Skipping FS check for now, as it is not very useful for vulnerability analysis
 #log "Verifying root filesystem..."
