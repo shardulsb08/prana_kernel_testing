@@ -9,7 +9,7 @@ SYZKALLER_BIN_DIR="$TEST_DIR/syzkaller/syzkaller"
 SYZKALLER_DIR="$TEST_DIR/syzkaller"
 SYZKALLER_CONFIG="$SYZKALLER_BIN_DIR/syzkaller.cfg"
 SSH_KEY="$SYZKALLER_DIR/.ssh/syzkaller_id_rsa"
-SSH_USER="user"
+SSH_USER="root"
 SSH_PASS="fedora"
 
 # Initialize KVER to an empty value
@@ -60,7 +60,7 @@ cat > "$SYZKALLER_CONFIG" <<EOF
     "procs": 8,
     "type": "isolated",
     "sshkey": "$SSH_KEY",
-    "ssh_user": "user",
+    "ssh_user": "root",
     "vm": {
         "targets": ["localhost:2222"],
         "target_dir": "/tmp/syzkaller",
@@ -71,4 +71,4 @@ EOF
 
 # Start Syzkaller
 echo "Starting Syzkaller..."
-"$SYZKALLER_BIN_DIR/bin/syz-manager" -config "$SYZKALLER_CONFIG"
+"$SYZKALLER_BIN_DIR/bin/syz-manager" -config "$SYZKALLER_CONFIG" -debug

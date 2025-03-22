@@ -109,6 +109,11 @@ users:
 ssh_pwauth: True
 packages:
   - stress-ng
+runcmd:
+  - mkdir -p /root/.ssh
+  - cp /home/${SSH_USER}/.ssh/authorized_keys /root/.ssh/authorized_keys
+  - chown root:root /root/.ssh/authorized_keys
+  - chmod 600 /root/.ssh/authorized_keys
 EOF
 
 cat > "$META_DATA_FILE" <<EOF
