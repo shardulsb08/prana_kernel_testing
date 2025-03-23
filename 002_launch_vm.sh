@@ -253,10 +253,10 @@ sudo mkdir -p /lib/modules/$KVER
 sudo cp -r "${ARTIFACT_DIR}/lib/modules/$KVER/"* "/lib/modules/$KVER/" || { log "Failed to copy kernel modules"; exit 1; }
 
 log "Generating initramfs for the new kernel..."
-sudo dracut -f --add-drivers "virtio_blk virtio_pci" "/boot/initramfs-${KVER}.img" $KVER || { log "dracut failed"; exit 1; }
+sudo dracut -f --add-drivers "virtio_blk virtio_pci btrfs" "/boot/initramfs-${KVER}.img" $KVER || { log "dracut failed"; exit 1; }
 
 log "Adding new kernel entry to bootloader with boot parameters using UUID..."
-sudo grubby --add-kernel="/boot/vmlinuz-${KVER}" --initrd="/boot/initramfs-${KVER}.img" --title="Custom Kernel $KVER" --args="root=UUID=$ROOT_UUID rootflags=subvol=root console=ttyS0" --make-default || {
+sudo grubby --add-kernel="/boot/vmlinuz-${KVER}" --initrd="/boot/initramfs-${KVER}.img" --title="Custom Kernel $KVER" --args="root=/dev/vda5 rootfstype=btrfs rootflags=subvol=root console=ttyS0" --make-default || {
     log "grubby failed; updating bootloader configuration manually..."
     sudo grub2-mkconfig -o /boot/grub2/grub.cfg
 }

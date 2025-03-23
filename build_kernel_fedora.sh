@@ -205,9 +205,9 @@ make olddefconfig
 # Enable Syzkaller-required options
 scripts/config --file .config --enable CONFIG_KCOV
 scripts/config --file .config --enable CONFIG_DEBUG_INFO
-# Optional: Enable KASAN for memory error detection
-#scripts/config --file .config --enable CONFIG_KASAN
 scripts/config --file .config --enable CONFIG_KCOV_ENABLE_COMPARISONS
+# Optional: Enable KASAN for memory error detection
+scripts/config --file .config --enable CONFIG_KASAN
 
 # Embed the config in the kernel image.
 scripts/config --file .config --enable CONFIG_IKCONFIG
