@@ -16,6 +16,7 @@ apply_kernel_configs() {
         if [[ "$line" =~ ^# ]] || [ -z "$line" ]; then
             continue
         fi
+        # Extract config name and value
         config=$(echo "$line" | cut -d= -f1)
         value=$(echo "$line" | cut -d= -f2)
         case "$value" in
@@ -29,7 +30,16 @@ apply_kernel_configs() {
                 scripts/config --file .config --disable "$config"
                 ;;
             *)
-                log "Warning: Unknown value '$value' for $config in $config_file"
+                if [[ "$value" =~ ^[0-9]+$ ]]; then
+                    # Handle numeric values
+                    scripts/config --file .config --set-val "$config" "$value"
+                elif [[ "$value" =~ ^\".*\"$ ]]; then
+                    # Handle string values (remove quotes)
+                    val="${value:1:-1}"
+                    scripts/config --file .config --set-str "$config" "$val"
+                else
+                    log "Warning: Unknown value '$value' for $config in $config_file"
+                fi
                 ;;
         esac
     done < "$config_file"
