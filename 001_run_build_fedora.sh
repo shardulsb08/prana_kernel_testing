@@ -41,7 +41,12 @@ else
     echo "Docker is already installed."
 fi
 
+# Prepare build input directory and copy test configuration files
 mkdir -p "$(pwd)/container_kernel_workspace"
-# Proceed with the existing commands
+mkdir -p "$(pwd)/build_input"
+cp host_drive/tests/test_config.txt "$(pwd)/build_input/"
+cp host_drive/tests/syzkaller/kernel_syskaller.config "$(pwd)/build_input/"
+
+# Build the Docker image and run the container
 docker build -t kernel-builder-fedora .
-docker run -it -v "$(pwd)/container_kernel_workspace":/build --name kernel-builder-fedora-container kernel-builder-fedora
+docker run -it -v "$(pwd)/container_kernel_workspace":/build -v "$(pwd)/build_input":/build_input --name kernel-builder-fedora-container kernel-builder-fedora

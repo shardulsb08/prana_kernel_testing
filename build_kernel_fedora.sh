@@ -7,6 +7,34 @@ log() {
     echo "[$(date +"%Y-%m-%d %H:%M:%S")] $*"
 }
 
+# Function to apply kernel configurations from a file
+apply_kernel_configs() {
+    local config_file=$1
+    log "Applying configurations from $config_file..."
+    while IFS= read -r line; do
+        # Skip comments and empty lines
+        if [[ "$line" =~ ^# ]] || [ -z "$line" ]; then
+            continue
+        fi
+        config=$(echo "$line" | cut -d= -f1)
+        value=$(echo "$line" | cut -d= -f2)
+        case "$value" in
+            "y")
+                scripts/config --file .config --enable "$config"
+                ;;
+            "m")
+                scripts/config --file .config --module "$config"
+                ;;
+            "n")
+                scripts/config --file .config --disable "$config"
+                ;;
+            *)
+                log "Warning: Unknown value '$value' for $config in $config_file"
+                ;;
+        esac
+    done < "$config_file"
+}
+
 # Create output directory for artifacts
 # Use an absolute path for the out directory
 OUT_DIR="/build/out/kernel_artifacts"
@@ -158,19 +186,19 @@ if [ ! -f "linux/.config" ]; then
         chmod +x ./generate_all_configs.sh || { log "Failed to set execute permission on generate_all_configs.sh"; exit 1; }
     fi
 
-    # Run the configuration generator.
-    # If it fails, log a warning but do not exit immediately.
+    # Run the configuration generator
+    # If it fails, log a warning but do not exit immediately
     if ! ./generate_all_configs.sh; then
         log "Warning: generate_all_configs.sh exited with a non-zero status. Checking for generated configuration..."
     fi
     
-    # Verify that the expected configuration file exists.
+    # Verify that the expected configuration file exists
     if [ ! -f kernel-x86_64-fedora.config ]; then
         log "Error: Configuration file kernel-x86_64-fedora.config was not generated. Exiting."
         exit 1
     fi
 
-    # Adjust the file name if necessary; here we assume kernel-x86_64.config is produced.
+    # Adjust the file name if necessary; here we assume kernel-x86_64.config is produced
     cp kernel-x86_64-fedora.config ../linux/.config
     cd ..
 fi
@@ -199,42 +227,26 @@ fi
 log "Updating kernel configuration with 'make olddefconfig'..."
 make olddefconfig
 
-# (Optional) Uncomment the next line for interactive configuration
-# make menuconfig
+# Check for test configurations and apply them
+if [ -f /build_input/test_config.txt ]; then
+    if grep -q '^syzkaller\b' /build_input/test_config.txt; then
+        if [ -f /build_input/kernel_syskaller.config ]; then
+            apply_kernel_configs /build_input/kernel_syskaller.config
+        else
+            log "Error: /build_input/kernel_syskaller.config not found"
+            exit 1
+        fi
+    fi
+else
+    log "Warning: /build_input/test_config.txt not found"
+fi
 
-# Enable Syzkaller-required options
-scripts/config --file .config --enable CONFIG_KCOV
-# To show code coverage in web interface
-# scripts/config --file .config --enable CONFIG_DEBUG_INFO
-scripts/config --file .config --enable CONFIG_DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT
-
-scripts/config --file .config --enable CONFIG_KCOV_ENABLE_COMPARISONS
-# Optional: Enable KASAN for memory error detection
-scripts/config --file .config --enable CONFIG_KASAN
-scripts/config --file .config --enable CONFIG_KASAN_INLINE
-# Debug info for symbolization.
-scripts/config --file .config --enable CONFIG_DEBUG_INFO_DWARF4
-# Required for Debian Stretch and later
-scripts/config --file .config --enable CONFIG_CONFIGFS_FS
-scripts/config --file .config --enable CONFIG_SECURITYFS
-scripts/config --file .config --enable CONFIG_DEBUG_INFO
-
-# To detect memory leaks using the Kernel Memory Leak Detector (kmemleak)
-scripts/config --file .config --enable CONFIG_DEBUG_KMEMLEAK
-
-# For detection of enabled syscalls and kernel bitness
-scripts/config --file .config --enable CONFIG_KALLSYMS
-scripts/config --file .config --enable CONFIG_KALLSYMS_ALL
-
-
-
-
-# Embed the config in the kernel image.
+# Embed the config in the kernel image
 scripts/config --file .config --enable CONFIG_IKCONFIG
 # Make the config available as /proc/config.gz
 scripts/config --file .config --enable CONFIG_IKCONFIG_PROC
 
-# 3. Update configuration
+# Update configuration again
 log "Updating kernel configuration with 'make olddefconfig'..."
 make olddefconfig
 
