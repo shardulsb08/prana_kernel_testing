@@ -208,6 +208,13 @@ scripts/config --file .config --enable CONFIG_DEBUG_INFO
 scripts/config --file .config --enable CONFIG_KCOV_ENABLE_COMPARISONS
 # Optional: Enable KASAN for memory error detection
 scripts/config --file .config --enable CONFIG_KASAN
+scripts/config --file .config --enable CONFIG_KASAN_INLINE
+# Debug info for symbolization.
+scripts/config --file .config --enable CONFIG_DEBUG_INFO_DWARF4
+scripts/config --file .config --enable CONFIG_CONFIGFS_FS
+
+scripts/config --file .config --enable CONFIG_SECURITYFS
+
 
 # Embed the config in the kernel image.
 scripts/config --file .config --enable CONFIG_IKCONFIG
