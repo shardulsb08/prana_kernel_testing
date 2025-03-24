@@ -217,22 +217,25 @@ if ! mountpoint -q /host_out; then
 fi
 
 log "Detecting kernel version from artifact directory..."
-# Look for versioned directories under /host_out/kernel_artifacts/
-KVER=$(ls -d /host_out/kernel_artifacts/v* 2>/dev/null | sort -V | tail -n 1 | sed 's|.*/v||')
-if [ -z "$KVER" ]; then
-    log "Error: Could not detect kernel version from /host_out/kernel_artifacts/"
+# Find the latest artifact directory (e.g., /host_out/kernel_artifacts/v6.14.0)
+ARTIFACT_DIR=$(ls -d /host_out/kernel_artifacts/v* 2>/dev/null | sort -V | tail -n 1)
+if [ -z "$ARTIFACT_DIR" ]; then
+    log "Error: No artifact directory found in /host_out/kernel_artifacts/"
     exit 1
 fi
+
+# Extract full kernel version (e.g., 6.14.0)
+KVER=$(basename "$ARTIFACT_DIR" | sed 's/^v//')
 log "Detected custom kernel version: $KVER"
 
 # Write KVER to a file in the shared folder
 echo "$KVER" > /host_out/kver.txt
 
-ARTIFACT_DIR="/host_out/kernel_artifacts/v${KVER}"
-if [ ! -f "${ARTIFACT_DIR}/vmlinuz-${KVER}" ]; then
-    log "Error: Kernel image not found at ${ARTIFACT_DIR}/vmlinuz-${KVER}"
-    exit 1
-fi
+#ARTIFACT_DIR="/host_out/kernel_artifacts/v${KVER}"
+#if [ ! -f "${ARTIFACT_DIR}/vmlinuz-${KVER}" ]; then
+#    log "Error: Kernel image not found at ${ARTIFACT_DIR}/vmlinuz-${KVER}"
+#    exit 1
+#fi
 
 log "Retrieving UUID of the root filesystem..."
 ROOT_DEVICE=$(findmnt -n -o SOURCE --target / | sed 's/\[.*\]//')

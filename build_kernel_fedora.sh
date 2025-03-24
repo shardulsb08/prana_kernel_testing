@@ -237,6 +237,11 @@ fi
 log "Updating kernel configuration with 'make olddefconfig'..."
 make olddefconfig
 
+# Determine the full kernel version
+log "Determining full kernel version..."
+FULL_KVER=$(make kernelrelease)
+log "Full kernel version: $FULL_KVER"
+
 # Check for test configurations and apply them
 if [ -f /build_input/test_config.txt ]; then
     if grep -q '^syzkaller\b' /build_input/test_config.txt; then
@@ -268,11 +273,11 @@ log "Building kernel modules..."
 make CC="ccache gcc" -j"$(nproc)" modules
 
 # 5. Copy artifacts
-OUT_DIR="/build/out/kernel_artifacts/v${LATEST_STABLE}"
+OUT_DIR="/build/out/kernel_artifacts/v${FULL_KVER}"
 mkdir -p "$OUT_DIR"
-log "Copying kernel image (bzImage) to ${OUT_DIR}/bzImage-custom..."
-cp arch/x86/boot/bzImage "$OUT_DIR/vmlinuz-${LATEST_STABLE}"
-cp .config "$OUT_DIR/config-${LATEST_STABLE}"
+log "Copying kernel image (bzImage) to ${OUT_DIR}/vmlinuz-${FULL_KVER}..."
+cp arch/x86/boot/bzImage "$OUT_DIR/vmlinuz-${FULL_KVER}"
+cp .config "$OUT_DIR/config-${FULL_KVER}"
 
 # Install modules
 log "Installing kernel modules into ${OUT_DIR}..."
