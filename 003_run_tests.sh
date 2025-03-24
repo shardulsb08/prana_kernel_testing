@@ -89,7 +89,7 @@ case "$test_name" in
             log "Error: Kernel image not found at ${ARTIFACT_DIR}/bzImage-custom"
             exit 1
         fi
-#        "$TESTS_DIR/syzkaller/setup_syzkaller.sh"
+        "$TESTS_DIR/syzkaller/setup_syzkaller.sh"
         mkdir -p "$TESTS_DIR/syzkaller/kernel_build/v${KVER}/"
         cp -r "${ARTIFACT_DIR}" "$TESTS_DIR/syzkaller/kernel_build/v${KVER}/"
         cp "${OUT_DIR}/../linux/vmlinux" "$TESTS_DIR/syzkaller/kernel_build/v${KVER}/"
