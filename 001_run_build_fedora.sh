@@ -41,6 +41,7 @@ else
     echo "Docker is already installed."
 fi
 
+mkdir -p "$(pwd)/container_kernel_workspace"
 # Proceed with the existing commands
 docker build -t kernel-builder-fedora .
 docker run -it -v "$(pwd)/container_kernel_workspace":/build --name kernel-builder-fedora-container kernel-builder-fedora
