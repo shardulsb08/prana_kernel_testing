@@ -149,6 +149,7 @@ rm -rf "$SCRIPT_DIR/cloudinit"
 # ========= 3. Launch the QEMU VM =========
 log "Launching QEMU VM with ${RAM_MB}MB RAM and ${VCPUS} vCPUs..."
 
+VM_LOGS="vm_$(date +"%Y%m%d%H%M%S").log"
 qemu-system-x86_64 \
     -enable-kvm \
     -m ${RAM_MB} \
@@ -162,7 +163,8 @@ qemu-system-x86_64 \
     -device virtio-9p-pci,fsdev=host_out,mount_tag=host_out \
     -fsdev local,id=host_drive,path="${SCRIPT_DIR}/host_drive",security_model=passthrough \
     -device virtio-9p-pci,fsdev=host_drive,mount_tag=host_drive \
-    -nographic &
+    -nographic \
+    2>&1 | tee "$VM_LOGS" &
 
 VM_PID=$!
 sleep 10
