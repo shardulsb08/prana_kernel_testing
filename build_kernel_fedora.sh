@@ -204,16 +204,29 @@ make olddefconfig
 
 # Enable Syzkaller-required options
 scripts/config --file .config --enable CONFIG_KCOV
-scripts/config --file .config --enable CONFIG_DEBUG_INFO
+# To show code coverage in web interface
+# scripts/config --file .config --enable CONFIG_DEBUG_INFO
+scripts/config --file .config --enable CONFIG_DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT
+
 scripts/config --file .config --enable CONFIG_KCOV_ENABLE_COMPARISONS
 # Optional: Enable KASAN for memory error detection
 scripts/config --file .config --enable CONFIG_KASAN
 scripts/config --file .config --enable CONFIG_KASAN_INLINE
 # Debug info for symbolization.
 scripts/config --file .config --enable CONFIG_DEBUG_INFO_DWARF4
+# Required for Debian Stretch and later
 scripts/config --file .config --enable CONFIG_CONFIGFS_FS
-
 scripts/config --file .config --enable CONFIG_SECURITYFS
+scripts/config --file .config --enable CONFIG_DEBUG_INFO
+
+# To detect memory leaks using the Kernel Memory Leak Detector (kmemleak)
+scripts/config --file .config --enable CONFIG_DEBUG_KMEMLEAK
+
+# For detection of enabled syscalls and kernel bitness
+scripts/config --file .config --enable CONFIG_KALLSYMS
+scripts/config --file .config --enable CONFIG_KALLSYMS_ALL
+
+
 
 
 # Embed the config in the kernel image.
