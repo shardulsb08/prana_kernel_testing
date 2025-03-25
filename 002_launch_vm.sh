@@ -149,7 +149,7 @@ rm -rf "$SCRIPT_DIR/cloudinit"
 # ========= 3. Launch the QEMU VM =========
 log "Launching QEMU VM with ${RAM_MB}MB RAM and ${VCPUS} vCPUs..."
 
-VM_LOGS="vm_$(date +"%Y%m%d%H%M%S").log"
+VM_LOGS="vm_$(date +"%Y_%m_%d_%H%M%S").log"
 qemu-system-x86_64 \
     -enable-kvm \
     -m ${RAM_MB} \
