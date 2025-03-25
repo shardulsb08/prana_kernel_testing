@@ -8,18 +8,40 @@ SYZKALLER_DIR="$PROJECT_DIR/host_drive/tests/syzkaller/syzkaller"
 
 # Function to check if Syzkaller is installed and functioning
 check_syzkaller() {
-    if [ -d "$SYZKALLER_DIR" ] && [ -f "$SYZKALLER_DIR/bin/syz-manager" ] && [ -f "$SYZKALLER_DIR/bin/syz-execprog" ]; then
-        # Check if syz-manager runs without errors (timeout after 5 seconds)
-        if timeout 5 "$SYZKALLER_DIR/bin/syz-manager" --version > /dev/null 2>&1; then
-            echo "Syzkaller is installed and functioning properly."
-            return 0  # Success
-        else
-            echo "Syzkaller is installed but not functioning properly."
-            return 1  # Failure
-        fi
+    local arch="linux_amd64"
+
+    echo "Checking directory: $SYZKALLER_DIR"
+    if [ -d "$SYZKALLER_DIR" ]; then
+        echo "Directory exists."
     else
         echo "Syzkaller is not installed."
-        return 1  # Failure
+        return 1
+    fi
+
+    if [ -f "$SYZKALLER_DIR/bin/syz-manager" ]; then
+        echo "syz-manager exists."
+    else
+        echo "Syzkaller is not installed."
+        return 1
+    fi
+
+    if [ -f "$SYZKALLER_DIR/bin/$arch/syz-execprog" ]; then
+        echo "syz-execprog exists."
+    else
+        echo "Syzkaller is not installed."
+        return 1
+    fi
+
+    echo "Running syz-manager --help to test functionality..."
+    output=$("$SYZKALLER_DIR/bin/syz-manager" --help 2>&1)
+    if echo "$output" | grep -q "Usage of"; then
+        echo "Syzkaller is installed and functioning properly."
+        return 0
+    else
+        echo "Syzkaller is installed but not functioning properly."
+        echo "Manual test output:"
+        echo "$output"
+        return 1
     fi
 }
 
@@ -55,14 +77,10 @@ if check_syzkaller; then
     echo "No action needed."
 else
     if [ -d "$SYZKALLER_DIR" ]; then
-        read -p "Syzkaller is not functioning properly. Do you want to reinstall? (y/n): " choice
-        if [ "$choice" = "y" ]; then
-            echo "Removing existing Syzkaller directory..."
-            rm -rf "$SYZKALLER_DIR"
-            install_syzkaller
-        else
-            echo "Skipping Syzkaller installation."
-        fi
+        echo "Syzkaller is not functioning properly. Reinstalling."
+        echo "Removing existing Syzkaller directory..."
+        rm -rf "$SYZKALLER_DIR"
+        install_syzkaller
     else
         install_syzkaller
     fi
