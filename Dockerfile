@@ -22,6 +22,7 @@ RUN dnf -y update && \
         openssl \
         dracut \
         ccache \
+        rsync  \
         git && \
     dnf clean all
 
