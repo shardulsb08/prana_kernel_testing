@@ -93,6 +93,7 @@ case "$test_name" in
         mkdir -p "$TESTS_DIR/syzkaller/kernel_build/v${KVER}/"
         cp -r "${ARTIFACT_DIR}" "$TESTS_DIR/syzkaller/kernel_build/v${KVER}/"
         cp "${OUT_DIR}/../linux/vmlinux" "$TESTS_DIR/syzkaller/kernel_build/v${KVER}/"
+        cp -r "${OUT_DIR}/../linux" "$TESTS_DIR/syzkaller/kernel_build/v${KVER}/"
 
 #Prepare VM for secure SSH access
         vm_ssh -- script <<SECURE_SSH
