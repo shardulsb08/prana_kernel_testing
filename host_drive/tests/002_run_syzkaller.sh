@@ -32,6 +32,16 @@ done
 
 KERNEL_BUILD_DIR="$SYZKALLER_DIR/kernel_build/v$KVER"
 
+find_free_port() {
+    while true; do
+        PORT=$(( ( RANDOM % 10000 ) + 10000 ))  # Ports 10000-19999
+        if ! nc -z localhost $PORT 2>/dev/null; then
+            echo $PORT
+            break
+        fi
+    done
+}
+
 # Optionally print KVER to verify it's set
 echo "Kernel directory is set to: $KVER"
 
@@ -46,14 +56,14 @@ fi
 PUBLIC_KEY=$(cat "$SSH_KEY.pub")
 
 
-
+HTTP_PORT=$(find_free_port)
 # Generate Syzkaller configuration
 echo "Generating Syzkaller configuration..."
 cat > "$SYZKALLER_CONFIG" <<EOF
 {
     "name": "fedora-vm",
     "target": "linux/amd64",
-    "http": ":8080",
+    "http": ":$HTTP_PORT",
     "workdir": "$SYZKALLER_DIR/syzkaller_workdir",
     "kernel_obj": "$KERNEL_BUILD_DIR",
     "syzkaller": "$SYZKALLER_BIN_DIR",
@@ -72,3 +82,4 @@ EOF
 # Start Syzkaller
 echo "Starting Syzkaller..."
 "$SYZKALLER_BIN_DIR/bin/syz-manager" -config "$SYZKALLER_CONFIG" -debug
+echo "Syzkaller web interface is available at http://localhost:$HTTP_PORT"
