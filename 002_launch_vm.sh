@@ -275,6 +275,9 @@ else
     sudo grubby --set-default="/boot/vmlinuz-${KVER}"
 fi
 
+# This prevents kernel packages from updating, so your custom kernel remains the only one in use.
+sudo sed -i '/\[main\]/a exclude=kernel*' /etc/dnf/dnf.conf
+
 log "Kernel installation complete. Rebooting to test the custom kernel..."
 sudo reboot & exit
 exit  # Exit SSH session immediately after reboot command
