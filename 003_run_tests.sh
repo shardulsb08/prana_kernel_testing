@@ -93,7 +93,18 @@ case "$test_name" in
         mkdir -p "$TESTS_DIR/syzkaller/kernel_build/v${KVER}/"
         cp -r "${ARTIFACT_DIR}" "$TESTS_DIR/syzkaller/kernel_build/v${KVER}/"
         cp "${OUT_DIR}/../linux/vmlinux" "$TESTS_DIR/syzkaller/kernel_build/v${KVER}/"
-        cp -r "${OUT_DIR}/../linux" "$TESTS_DIR/syzkaller/kernel_build/v${KVER}/"
+	# Mount kernel build dir to VM
+	log "Mounting kernel build dir for Syzkaller access..."
+	vm_ssh -- script <<'EOF'
+            set -euo pipefail
+            sudo mkdir -p /host_out
+            sudo mount -t 9p -o trans=virtio host_out /host_out
+            KVER=$(cat /host_out/out/kver.txt)
+#            ln -s "$TESTS_DIR/syzkaller/kernel_build/v${KVER}/linux" /host_out/linux
+            ln -sfn /host_out/linux /home/user/host_drive/tests/syzkaller/kernel_build/v${KVER}/v${KVER}/
+            exit # Ensure SSH session exits
+EOF
+#        cp -r "${OUT_DIR}/../linux" "$TESTS_DIR/syzkaller/kernel_build/v${KVER}/"
 
 #Prepare VM for secure SSH access
         vm_ssh -- script <<SECURE_SSH

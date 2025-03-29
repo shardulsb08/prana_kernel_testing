@@ -159,7 +159,7 @@ qemu-system-x86_64 \
     -boot d \
     -net user,hostfwd=tcp::2222-:22 \
     -net nic \
-    -fsdev local,id=host_out,path="${OUT_DIR}",security_model=passthrough \
+    -fsdev local,id=host_out,path="${OUT_DIR}/..",security_model=passthrough \
     -device virtio-9p-pci,fsdev=host_out,mount_tag=host_out \
     -fsdev local,id=host_drive,path="${SCRIPT_DIR}/host_drive",security_model=passthrough \
     -device virtio-9p-pci,fsdev=host_drive,mount_tag=host_drive \
@@ -217,10 +217,10 @@ if ! mountpoint -q /host_out; then
 fi
 
 log "Detecting kernel version from artifact directory..."
-# Find the latest artifact directory (e.g., /host_out/kernel_artifacts/v6.14.0)
-ARTIFACT_DIR=$(ls -d /host_out/kernel_artifacts/v* 2>/dev/null | sort -V | tail -n 1)
+# Find the latest artifact directory (e.g., /host_out/out/kernel_artifacts/v6.14.0)
+ARTIFACT_DIR=$(ls -d /host_out/out/kernel_artifacts/v* 2>/dev/null | sort -V | tail -n 1)
 if [ -z "$ARTIFACT_DIR" ]; then
-    log "Error: No artifact directory found in /host_out/kernel_artifacts/"
+    log "Error: No artifact directory found in /host_out/out/kernel_artifacts/"
     exit 1
 fi
 
@@ -229,9 +229,9 @@ KVER=$(basename "$ARTIFACT_DIR" | sed 's/^v//')
 log "Detected custom kernel version: $KVER"
 
 # Write KVER to a file in the shared folder
-echo "$KVER" > /host_out/kver.txt
+echo "$KVER" > /host_out/out/kver.txt
 
-#ARTIFACT_DIR="/host_out/kernel_artifacts/v${KVER}"
+#ARTIFACT_DIR="/host_out/out/kernel_artifacts/v${KVER}"
 #if [ ! -f "${ARTIFACT_DIR}/vmlinuz-${KVER}" ]; then
 #    log "Error: Kernel image not found at ${ARTIFACT_DIR}/vmlinuz-${KVER}"
 #    exit 1
