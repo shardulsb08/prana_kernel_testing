@@ -52,6 +52,7 @@ mkdir -p "$SYZKALLER_DIR/syzkaller_workdir"
 if [ ! -f "$SSH_KEY" ]; then
     echo "Generating SSH key pair for Syzkaller..."
     ssh-keygen -t rsa -b 4096 -f "$SSH_KEY" -N ""
+    chmod 0600 "$SSH_KEY"
 fi
 PUBLIC_KEY=$(cat "$SSH_KEY.pub")
 
