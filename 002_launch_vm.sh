@@ -11,7 +11,30 @@ source "$SCRIPT_DIR/common.sh"
 VM_NAME="fedora-vm"
 DISK_IMAGE="$SCRIPT_DIR/fedora_vm.qcow2"
 CLOUD_IMAGE="$SCRIPT_DIR/Fedora-Cloud-Base-38-1.6.x86_64.qcow2"
-CLOUD_IMAGE_URL="https://download.fedoraproject.org/pub/fedora/linux/releases/38/Cloud/x86_64/images/${CLOUD_IMAGE##*/}"
+
+echo "Fetching latest Fedora release version"
+# Fetch the latest Fedora release version
+RELEASES=$(curl -sL https://download.fedoraproject.org/pub/fedora/linux/releases/ | grep -oP '(?<=<a href=")[0-9]+(?=/")')
+LATEST_VERSION=$(echo "$RELEASES" | sort -n | tail -1)
+
+# Fetch the latest cloud image for that version
+IMAGES=$(curl -sL "https://download.fedoraproject.org/pub/fedora/linux/releases/${LATEST_VERSION}/Cloud/x86_64/images/" | grep -oP '(?<=<a href=")Fedora-Cloud-Base-(Generic-)?[0-9]+-[0-9.]+.x86_64.qcow2(?=")')
+# Check if images were found
+if [ -z "$IMAGES" ]; then
+    echo "Error: No cloud images found for Fedora version $LATEST_VERSION."
+    exit 1
+fi
+# Select the latest image
+LATEST_IMAGE=$(echo "$IMAGES" | sort -V | tail -1)
+CLOUD_IMAGE=$LATEST_IMAGE
+
+# Construct the download URL
+CLOUD_IMAGE_URL="https://download.fedoraproject.org/pub/fedora/linux/releases/${LATEST_VERSION}/Cloud/x86_64/images/${LATEST_IMAGE}"
+
+echo "Latest cloud image URL: $CLOUD_IMAGE_URL"
+
+# Optionally, download the image
+# wget "$CLOUD_IMAGE_URL" -O fedora-cloud-image.qcow2
 CLOUD_INIT_ISO="$SCRIPT_DIR/seed.iso"
 OUT_DIR="$SCRIPT_DIR/container_kernel_workspace/out"  # Directory with kernel artifacts
 TEST_CONFIG="$SCRIPT_DIR/host_drive/tests/test_config.txt"  # Path to test config on host
