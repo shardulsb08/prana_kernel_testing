@@ -27,7 +27,7 @@ if [ ! -f "$SYZKALLER_SSH_KEY" ]; then
     mkdir -p "$SYZKALLER_DIR/.ssh"
     echo "Generating SSH key pair for Syzkaller..."
     ssh-keygen -t rsa -b 4096 -f "$SYZKALLER_SSH_KEY" -N ""
-    chmod 600 $SYZKALLER_SSH_KEY
+    chmod 600 "$SYZKALLER_SSH_KEY"
     # Output the public key to copy to the VM
     echo "Public key to add to VM's /root/.ssh/authorized_keys:"
     cat "${SYZKALLER_SSH_KEY}.pub"
@@ -105,13 +105,13 @@ users:
     lock_passwd: false
     passwd: $(openssl passwd -6 ${SSH_PASS})
     ssh_authorized_keys:
-      - $PUBLIC_KEY
+      - "$PUBLIC_KEY"
 ssh_pwauth: True
 packages:
   - stress-ng
 runcmd:
   - mkdir -p /root/.ssh
-  - cp /home/${SSH_USER}/.ssh/authorized_keys /root/.ssh/authorized_keys
+  - cp "/home/${SSH_USER}/.ssh/authorized_keys /root/.ssh/authorized_keys"
   - chown root:root /root/.ssh/authorized_keys
   - chmod 600 /root/.ssh/authorized_keys
 EOF
