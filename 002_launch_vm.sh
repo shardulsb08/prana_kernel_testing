@@ -281,10 +281,21 @@ sudo mkdir -p /lib/modules/$KVER
 sudo cp -r "${ARTIFACT_DIR}/lib/modules/$KVER/"* "/lib/modules/$KVER/" || { log "Failed to copy kernel modules"; exit 1; }
 
 log "Generating initramfs for the new kernel..."
-sudo dracut -f --add-drivers "virtio_blk virtio_pci btrfs" "/boot/initramfs-${KVER}.img" $KVER || { log "dracut failed"; exit 1; }
+# Update dracut configuration for the correct drivers and filesystem
+HOOK_NAME="devexists-$(echo /dev/vda4 | sed 's/\//_/g').sh"
+sudo mkdir -p /lib/dracut/hooks/initqueue/finished
+sudo tee /lib/dracut/hooks/initqueue/finished/"$HOOK_NAME" <<EOF
+#!/bin/sh
+[ -e "/dev/vda4" ]
+EOF
+sudo chmod +x /lib/dracut/hooks/initqueue/finished/"$HOOK_NAME"
+echo "force_drivers+=\" virtio_blk virtio_pci btrfs \"" | sudo tee /etc/dracut.conf.d/99-custom.conf
+echo "add_drivers+=\" btrfs \"" | sudo tee -a /etc/dracut.conf.d/99-custom.conf
+sudo dracut -f --add-drivers "virtio_blk virtio_pci btrfs" --force --kver 6.14.0 \
+    --fstab --include /lib/dracut/hooks /lib/dracut/hooks /boot/initramfs-6.14.0.img
 
 log "Adding new kernel entry to bootloader with boot parameters using UUID..."
-sudo grubby --add-kernel="/boot/vmlinuz-${KVER}" --initrd="/boot/initramfs-${KVER}.img" --title="Custom Kernel $KVER" --args="root=/dev/vda5 rootfstype=btrfs rootflags=subvol=root console=ttyS0" --make-default || {
+sudo grubby --add-kernel="/boot/vmlinuz-${KVER}" --initrd="/boot/initramfs-${KVER}.img" --title="Custom Kernel $KVER" --args="root=/dev/vda4 rootfstype=btrfs rootflags=subvol=root console=ttyS0" --make-default || {
     log "grubby failed; updating bootloader configuration manually..."
     sudo grub2-mkconfig -o /boot/grub2/grub.cfg
 }
