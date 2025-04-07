@@ -180,13 +180,14 @@ qemu-system-x86_64 \
     -drive file="${DISK_IMAGE}",format=qcow2,if=virtio \
     -cdrom "${CLOUD_INIT_ISO}" \
     -boot d \
-    -net user,hostfwd=tcp::2222-:22 \
+    -net user,host=10.0.2.10,hostfwd=tcp:127.0.0.1:10021-:22 \
     -net nic \
     -fsdev local,id=host_out,path="${OUT_DIR}/..",security_model=passthrough \
     -device virtio-9p-pci,fsdev=host_out,mount_tag=host_out \
     -fsdev local,id=host_drive,path="${SCRIPT_DIR}/host_drive",security_model=passthrough \
     -device virtio-9p-pci,fsdev=host_drive,mount_tag=host_drive \
     -nographic \
+    -pidfile vm.pid \
     2>&1 | tee "$VM_LOGS" &
 
 VM_PID=$!
@@ -210,16 +211,16 @@ wait_cloud_init
 log "VM is ready. Proceeding with next steps..."
 
 # ========= 4. Wait for SSH Access =========
-log "Waiting for SSH on port 2222..."
+log "Waiting for SSH on port $VM_SSH_PORT..."
 for i in {1..30}; do
-    if nc -z localhost 2222; then
+    if nc -z $SSH_HOST $VM_SSH_PORT; then
         log "SSH is available!"
         break
     fi
     sleep 10
 done
 
-if ! nc -z localhost 2222; then
+if ! nc -z $SSH_HOST $VM_SSH_PORT; then
     log "Error: SSH did not become available. Exiting."
     exit 1
 fi
@@ -280,6 +281,10 @@ log "Installing kernel modules..."
 sudo mkdir -p /lib/modules/$KVER
 sudo cp -r "${ARTIFACT_DIR}/lib/modules/$KVER/"* "/lib/modules/$KVER/" || { log "Failed to copy kernel modules"; exit 1; }
 
+log "Installing kernel headers..."
+sudo mkdir -p /usr/src/kernels/$KVER/usr
+sudo cp -r "${ARTIFACT_DIR}/include" "/usr/src/kernels/$KVER/usr/" || { log "Failed to copy kernel modules"; exit 1; }
+
 log "Generating initramfs for the new kernel..."
 # Update dracut configuration for the correct drivers and filesystem
 HOOK_NAME="devexists-$(echo /dev/vda4 | sed 's/\//_/g').sh"
@@ -326,7 +331,7 @@ REMOTE_EOF
 
     # Wait for SSH to go down (VM rebooting)
     for i in {1..30}; do
-        if ! nc -z localhost 2222; then
+        if ! nc -z $SSH_HOST $VM_SSH_PORT; then
             log "SSH is down; VM is rebooting."
             break
         fi
@@ -337,14 +342,14 @@ REMOTE_EOF
     wait_cloud_init
     # Wait for SSH to become available after reboot
     for i in {1..30}; do
-        if nc -z localhost 2222; then
+        if nc -z $SSH_HOST $VM_SSH_PORT; then
             log "SSH is available after reboot."
             break
         fi
         sleep 10
     done
 
-    if ! nc -z localhost 2222; then
+    if ! nc -z $SSH_HOST $VM_SSH_PORT; then
         log "Error: SSH did not become available after reboot."
         exit 1
     fi
@@ -382,7 +387,7 @@ EOF
         sudo mount -t 9p -o trans=virtio host_drive /home/user/host_drive
         exit  # Ensure SSH session exits
 EOF
-    log "VM is running. Connect via SSH with: ssh -p 2222 ${SSH_USER}@localhost"
+    log "VM is running. Connect via SSH with: ssh -p $VM_SSH_PORT ${SSH_USER}@$SSH_HOST"
 
     # Trigger tests if requested (no kernel install)
     if [ "$RUN_TESTS" == "true" ]; then
@@ -394,4 +399,4 @@ EOF
     fi
 fi
 
-echo "VM is running. SSH: ssh -i $SYZKALLER_SSH_KEY -p 2222 $SSH_USER@localhost"
+echo "VM is running. SSH: ssh -i $SYZKALLER_SSH_KEY -p $VM_SSH_PORT $SSH_USER@$SSH_HOST"

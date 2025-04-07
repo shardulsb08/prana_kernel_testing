@@ -7,8 +7,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
 SSH_USER="user"
 SSH_PASS="fedora"    # Default password (set in cloud-init)
-VM_SSH_PORT=2222
-SSH_HOST="localhost"
+VM_SSH_PORT=10021
+SSH_HOST="127.0.0.1"
 
 OUT_DIR="$SCRIPT_DIR/container_kernel_workspace/out"  # Directory with kernel artifacts
 

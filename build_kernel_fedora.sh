@@ -282,5 +282,7 @@ cp .config "$OUT_DIR/config-${FULL_KVER}"
 # Install modules
 log "Installing kernel modules into ${OUT_DIR}..."
 make modules_install INSTALL_MOD_PATH="$OUT_DIR"
+make headers_install INSTALL_HDR_PATH="$OUT_DIR"
 
 log "Kernel build complete. Artifacts are available in ${OUT_DIR}."
+#tail -f /dev/null
