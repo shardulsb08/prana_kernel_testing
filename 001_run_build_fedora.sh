@@ -1,5 +1,40 @@
 #!/bin/bash
 
+# =============================================================================
+# Kernel Build Orchestration Script
+# =============================================================================
+#
+# This script orchestrates the kernel build process in a containerized environment.
+# It handles:
+# 1. Docker environment setup and validation
+# 2. Kernel source preparation
+# 3. Build configuration management
+# 4. Compilation and artifact collection
+#
+# Usage:
+#   ./001_run_build_fedora.sh [options]
+#
+# Options:
+#   --clean         Clean previous build artifacts
+#   --no-cache     Disable Docker build cache
+#   --debug        Enable debug output
+#
+# Environment Variables:
+#   KERNEL_VERSION  Override default kernel version
+#   DOCKER_OPTS    Additional Docker options
+#   BUILD_JOBS     Number of parallel build jobs (default: nproc)
+#
+# Output:
+#   Built kernel artifacts are stored in:
+#   container_kernel_workspace/out/kernel_artifacts/v<version>/
+#
+# Dependencies:
+#   - Docker
+#   - bash
+#   - Standard build tools (make, gcc, etc.)
+#
+# =============================================================================
+
 # Function to install Docker if not installed
 install_docker() {
     echo "Docker is not installed. Installing Docker..."

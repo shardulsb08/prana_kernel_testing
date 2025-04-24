@@ -1,4 +1,88 @@
 #!/bin/bash
+
+# =============================================================================
+# VM Launch and Management Script
+# =============================================================================
+#
+# This script is part of a kernel testing framework that includes:
+# 1. Kernel building (001_run_build_fedora.sh)
+# 2. VM management (this script)
+# 3. Test orchestration (003_run_tests.sh)
+#
+# Features:
+# 1. VM Setup:
+#    - Automated Fedora cloud image preparation
+#    - Dynamic cloud-init configuration
+#    - Shared directory mounting (/host_drive, /host_out)
+#    - Resource allocation (CPU, memory, storage)
+#
+# 2. Network Configuration:
+#    Supports three modes via SYZKALLER_SETUP:
+#    a) SYZKALLER_LOCAL (Default):
+#       - Port: 2222
+#       - Host: localhost
+#       - For local development/testing
+#
+#    b) SYZKALLER_SYZGEN:
+#       - Port: 10021
+#       - Host: 127.0.0.1
+#       - For SyzGen++ integration
+#
+# 3. Kernel Installation (--install-kernel):
+#    - Installs latest stable kernel
+#    - Configures for debugging/testing
+#    - Sets up syzkaller-specific features if needed
+#    - Manages boot configuration (grub)
+#    - Preserves kernel version info
+#
+# 4. Test Integration (--run-tests):
+#    Executes tests in two phases:
+#    a) VM-safe tests (run inside VM)
+#       - Basic smoke tests
+#       - Kernel feature validation
+#    b) Host-based tests
+#       - Syzkaller fuzzing
+#       - Performance tests
+#
+# Usage:
+#   ./002_launch_vm.sh [options]
+#
+# Options:
+#   --install-kernel  Install and configure custom kernel
+#   --run-tests      Execute configured test suites
+#
+# Prerequisites:
+#   1. Build Environment:
+#      - Docker with kernel build container
+#      - QEMU for VM management
+#      - Fedora cloud image
+#
+#   2. Test Environment:
+#      - Syzkaller (auto-installed if needed)
+#      - Test configurations in host_drive/tests/
+#      - SSH key setup for automation
+#
+# Directory Structure:
+#   /host_drive/     -> Mapped to VM:/home/user/host_drive/
+#     tests/         -> Test suites and configurations
+#       syzkaller/   -> Syzkaller test environment
+#   /host_out/       -> Mapped to VM:/host_out/
+#     kernel_artifacts/ -> Built kernel and modules
+#
+# Configuration Files:
+#   - common.sh: Shared variables and functions
+#   - test_config.txt: Test suite configuration
+#   - kernel_syskaller.config: Syzkaller kernel options
+#
+# Environment Variables:
+#   VM_MEMORY        Memory allocation (default: 20480MB)
+#   VM_CPUS         CPU cores (default: 16)
+#   SYZKALLER_SETUP Network mode (LOCAL/SYZGEN)
+#   SSH_USER        VM username (default: user)
+#   SSH_PASS        VM password (default: fedora)
+#
+# =============================================================================
+
 set -euo pipefail
 
 # Determine the script's directory for consistent file paths

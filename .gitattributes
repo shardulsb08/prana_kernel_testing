@@ -1,5 +1,22 @@
-# Enforce LF line endings for all text files
-* text=auto
+# Auto detect text files and perform LF normalization
+* text=auto eol=lf
+
+# Documents
+*.md text diff=markdown whitespace=trailing-space,space-before-tab,blank-at-eol
+*.txt text whitespace=trailing-space,space-before-tab,blank-at-eol
+
+# Scripts
+*.sh text eol=lf whitespace=trailing-space,space-before-tab,blank-at-eol
+*.py text eol=lf whitespace=trailing-space,space-before-tab,blank-at-eol
+
+# Configs
+*.config text eol=lf whitespace=trailing-space,space-before-tab,blank-at-eol
+*.json text eol=lf whitespace=trailing-space,space-before-tab,blank-at-eol
+
+# Don't modify binary files
+*.iso binary
+*.qcow2 binary
+*.img binary
 
 # Normalize line endings for specific text file types
 *.c       text eol=lf
@@ -12,7 +29,6 @@
 *.ts      text eol=lf
 *.html    text eol=lf
 *.css     text eol=lf
-*.json    text eol=lf
 *.xml     text eol=lf
 *.md      text eol=lf
 

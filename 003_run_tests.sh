@@ -1,4 +1,54 @@
 #!/bin/bash
+
+# =============================================================================
+# Kernel Test Execution Script
+# =============================================================================
+#
+# This script orchestrates the execution of kernel tests in both VM and host
+# environments. It executes tests in two phases:
+# 1. VM-based tests that are safer to run (less likely to crash VM)
+# 2. Host-based tests that may affect VM stability
+#
+# Features:
+# - Two-phase test execution (VM-safe tests first, then host tests)
+# - Automated test environment setup
+# - SSH connectivity verification
+# - Test directory mounting verification
+# - Syzkaller fuzzing test support
+#
+# Usage:
+#   ./003_run_tests.sh
+#
+# Configuration:
+#   Tests are configured in: ./host_drive/tests/test_config.txt
+#   Format: <test_name> [optional_parameter]
+#
+# Available Tests:
+#   - smoke_test: Basic kernel functionality test (runs in VM)
+#   - syzkaller: Kernel fuzzing framework (runs from host)
+#     - Requires kernel artifacts in OUT_DIR
+#     - Sets up VM for syzkaller access
+#     - Configures secure SSH access
+#
+# Prerequisites:
+#   - VM must be running (launched via 002_launch_vm.sh)
+#   - Test configuration file must exist
+#   - Required test directories must be mounted
+#   - SSH access must be available on VM_SSH_PORT
+#
+# Environment:
+#   SCRIPT_DIR    - Script's directory path
+#   TEST_CONFIG   - Path to test configuration file
+#   TESTS_DIR     - Host path to tests directory
+#   VM_TESTS_DIR  - VM path to tests directory
+#   OUT_DIR       - Output directory for kernel artifacts
+#
+# Exit Codes:
+#   0 - All tests passed
+#   1 - Test failure or environment setup error
+#
+# =============================================================================
+
 set -euo pipefail
 
 # Determine the script's directory
@@ -119,7 +169,7 @@ log() {
 sudo dnf -y update
 sudo dnf -y install openssh-server
 
-## Create .ssh directory for root if it doesn’t exist
+## Create .ssh directory for root if it doesn't exist
 #sudo mkdir -p /root/.ssh
 #sudo chmod 700 /root/.ssh
 #
