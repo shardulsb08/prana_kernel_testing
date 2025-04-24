@@ -134,7 +134,7 @@ packages:
   - stress-ng
 runcmd:
   - mkdir -p /root/.ssh
-  - cp "/home/${SSH_USER}/.ssh/authorized_keys /root/.ssh/authorized_keys"
+  - cp "/home/${SSH_USER}/.ssh/authorized_keys" /root/.ssh/authorized_keys
   - chown root:root /root/.ssh/authorized_keys
   - chmod 600 /root/.ssh/authorized_keys
 EOF
@@ -180,7 +180,7 @@ qemu-system-x86_64 \
     -drive file="${DISK_IMAGE}",format=qcow2,if=virtio \
     -cdrom "${CLOUD_INIT_ISO}" \
     -boot d \
-    -net user,hostfwd=tcp::2222-:22 \
+    -net user,host=10.0.2.10,hostfwd=${VM_HOSTFWD} \
     -net nic \
     -fsdev local,id=host_out,path="${OUT_DIR}/..",security_model=passthrough \
     -device virtio-9p-pci,fsdev=host_out,mount_tag=host_out \
@@ -210,16 +210,16 @@ wait_cloud_init
 log "VM is ready. Proceeding with next steps..."
 
 # ========= 4. Wait for SSH Access =========
-log "Waiting for SSH on port 2222..."
+log "Waiting for SSH on port $VM_SSH_PORT..."
 for i in {1..30}; do
-    if nc -z localhost 2222; then
+    if nc -z $SSH_HOST $VM_SSH_PORT; then
         log "SSH is available!"
         break
     fi
     sleep 10
 done
 
-if ! nc -z localhost 2222; then
+if ! nc -z $SSH_HOST $VM_SSH_PORT; then
     log "Error: SSH did not become available. Exiting."
     exit 1
 fi
