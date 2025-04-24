@@ -30,3 +30,11 @@ The `host_drive/` directory in the project root is mapped to `/home/user/host_dr
 - `tests/`: Test scripts and configurations.
 
 To share additional data with the VM (e.g., logs, patches), place it in `host_drive/` on the host, and access it from `/home/user/host_drive` in the VM.
+
+## Test related configurations
+The tests to run using the scripts should be added here:
+host_drive/tests/test_config.txt
+And the script to run the tests (along with the required configurations and dependencies setup) sequentially in path:
+host_drive/tests/
+Run these scripts by adding them as hooks in:
+003_run_tests.sh
