@@ -45,7 +45,7 @@ fi
 mkdir -p "$(pwd)/container_kernel_workspace"
 mkdir -p "$(pwd)/build_input"
 cp host_drive/tests/test_config.txt "$(pwd)/build_input/"
-cp host_drive/tests/syzkaller/kernel_syskaller.config "$(pwd)/build_input/"
+cp host_drive/tests/syzkaller/*.config "$(pwd)/build_input/"
 
 # Build the Docker image and run the container
 docker build -t kernel-builder-fedora .
