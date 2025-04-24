@@ -251,6 +251,20 @@ if [ -f /build_input/test_config.txt ]; then
             log "Error: /build_input/kernel_syskaller.config not found"
             exit 1
         fi
+    elif grep -q '^syzgen_config_raw\b' /build_input/test_config.txt; then
+        if [ -f /build_input/kernel_syzgen_raw.config ]; then
+            apply_kernel_configs /build_input/kernel_syzgen_raw.config
+        else
+           log "Error: /build_input/kernel_syzgen_raw.config not found"
+            exit 1
+        fi
+    elif grep -q '^syzgen_config_fuzz\b' /build_input/test_config.txt; then
+        if [ -f /build_input/kernel_syzgen_fuzz.config ]; then
+            apply_kernel_configs /build_input/kernel_syzgen_fuzz.config
+        else
+           log "Error: /build_input/kernel_syzgen_fuzz.config not found"
+            exit 1
+        fi
     fi
 else
     log "Warning: /build_input/test_config.txt not found"
