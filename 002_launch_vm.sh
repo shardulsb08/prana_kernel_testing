@@ -134,7 +134,7 @@ packages:
   - stress-ng
 runcmd:
   - mkdir -p /root/.ssh
-  - cp "/home/${SSH_USER}/.ssh/authorized_keys /root/.ssh/authorized_keys"
+  - cp "/home/${SSH_USER}/.ssh/authorized_keys" /root/.ssh/authorized_keys
   - chown root:root /root/.ssh/authorized_keys
   - chmod 600 /root/.ssh/authorized_keys
 EOF
@@ -180,7 +180,7 @@ qemu-system-x86_64 \
     -drive file="${DISK_IMAGE}",format=qcow2,if=virtio \
     -cdrom "${CLOUD_INIT_ISO}" \
     -boot d \
-    -net user,host=10.0.2.10,hostfwd=tcp:127.0.0.1:10021-:22 \
+    -net user,host=10.0.2.10,hostfwd=${VM_HOSTFWD} \
     -net nic \
     -fsdev local,id=host_out,path="${OUT_DIR}/..",security_model=passthrough \
     -device virtio-9p-pci,fsdev=host_out,mount_tag=host_out \
@@ -234,6 +234,10 @@ log() {
     echo -e "\n\e[34m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
 }
 
+log "dnf update to get latest packages"
+sudo dnf -y update
+sudo dnf install -y rpmbuild
+
 log "Ensuring shared folder is mounted at /host_out..."
 if ! mountpoint -q /host_out; then
     sudo mkdir -p /host_out
@@ -284,6 +288,8 @@ sudo cp -r "${ARTIFACT_DIR}/lib/modules/$KVER/"* "/lib/modules/$KVER/" || { log 
 log "Installing kernel headers..."
 sudo mkdir -p /usr/src/kernels/$KVER/usr
 sudo cp -r "${ARTIFACT_DIR}/include" "/usr/src/kernels/$KVER/usr/" || { log "Failed to copy kernel modules"; exit 1; }
+rpmbuild -ba ~/rpmbuild/SPECS/dummy-kernel-headers.spec
+sudo dnf install -y ~/rpmbuild/RPMS/noarch/dummy-kernel-headers-6.14.0-1.noarch.rpm
 
 log "Generating initramfs for the new kernel..."
 # Update dracut configuration for the correct drivers and filesystem
