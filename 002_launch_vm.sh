@@ -1,4 +1,88 @@
 #!/bin/bash
+
+# =============================================================================
+# VM Launch and Management Script
+# =============================================================================
+#
+# This script is part of a kernel testing framework that includes:
+# 1. Kernel building (001_run_build_fedora.sh)
+# 2. VM management (this script)
+# 3. Test orchestration (003_run_tests.sh)
+#
+# Features:
+# 1. VM Setup:
+#    - Automated Fedora cloud image preparation
+#    - Dynamic cloud-init configuration
+#    - Shared directory mounting (/host_drive, /host_out)
+#    - Resource allocation (CPU, memory, storage)
+#
+# 2. Network Configuration:
+#    Supports three modes via SYZKALLER_SETUP:
+#    a) SYZKALLER_LOCAL (Default):
+#       - Port: 2222
+#       - Host: localhost
+#       - For local development/testing
+#
+#    b) SYZKALLER_SYZGEN:
+#       - Port: 10021
+#       - Host: 127.0.0.1
+#       - For SyzGen++ integration
+#
+# 3. Kernel Installation (--install-kernel):
+#    - Installs latest stable kernel
+#    - Configures for debugging/testing
+#    - Sets up syzkaller-specific features if needed
+#    - Manages boot configuration (grub)
+#    - Preserves kernel version info
+#
+# 4. Test Integration (--run-tests):
+#    Executes tests in two phases:
+#    a) VM-safe tests (run inside VM)
+#       - Basic smoke tests
+#       - Kernel feature validation
+#    b) Host-based tests
+#       - Syzkaller fuzzing
+#       - Performance tests
+#
+# Usage:
+#   ./002_launch_vm.sh [options]
+#
+# Options:
+#   --install-kernel  Install and configure custom kernel
+#   --run-tests      Execute configured test suites
+#
+# Prerequisites:
+#   1. Build Environment:
+#      - Docker with kernel build container
+#      - QEMU for VM management
+#      - Fedora cloud image
+#
+#   2. Test Environment:
+#      - Syzkaller (auto-installed if needed)
+#      - Test configurations in host_drive/tests/
+#      - SSH key setup for automation
+#
+# Directory Structure:
+#   /host_drive/     -> Mapped to VM:/home/user/host_drive/
+#     tests/         -> Test suites and configurations
+#       syzkaller/   -> Syzkaller test environment
+#   /host_out/       -> Mapped to VM:/host_out/
+#     kernel_artifacts/ -> Built kernel and modules
+#
+# Configuration Files:
+#   - common.sh: Shared variables and functions
+#   - test_config.txt: Test suite configuration
+#   - kernel_syskaller.config: Syzkaller kernel options
+#
+# Environment Variables:
+#   VM_MEMORY        Memory allocation (default: 20480MB)
+#   VM_CPUS         CPU cores (default: 16)
+#   SYZKALLER_SETUP Network mode (LOCAL/SYZGEN)
+#   SSH_USER        VM username (default: user)
+#   SSH_PASS        VM password (default: fedora)
+#
+# =============================================================================
+
 set -euo pipefail
 
 # Determine the script's directory for consistent file paths
@@ -6,6 +90,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
 # Source common functions and variables
 source "$SCRIPT_DIR/common.sh"
+
+# Source network configuration
+source "$SCRIPT_DIR/infrastructure/network/config.sh"
+source "$SCRIPT_DIR/infrastructure/network/syzkaller.sh"
+source "$SCRIPT_DIR/infrastructure/network/syzgen.sh"
+
+# Configure network based on SYZKALLER_SETUP
+case "${SYZKALLER_SETUP:-LOCAL}" in
+    "SYZGEN")
+        setup_syzgen_network
+        ;;
+    "SYZKALLER")
+        setup_syzkaller_network
+        ;;
+    *)
+        setup_network_config "LOCAL"
+        ;;
+esac
 
 # ========= Configuration Variables =========
 VM_NAME="fedora-vm"
@@ -173,10 +275,21 @@ rm -rf "$SCRIPT_DIR/cloudinit"
 log "Launching QEMU VM with ${RAM_MB}MB RAM and ${VCPUS} vCPUs..."
 
 VM_LOGS="vm_$(date +"%Y_%m_%d_%H%M%S").log"
+
+# Use the configured network settings
+SSH_PORT="$VM_SSH_PORT"
+SSH_HOST="$SSH_HOST"
+VM_NET_CONFIG="$VM_HOSTFWD"
+
+# Update QEMU network configuration
+QEMU_OPTS="-netdev user,id=user.0,hostfwd=${VM_NET_CONFIG} \
+           -device virtio-net-pci,netdev=user.0"
+
+VM_LOGS="vm_$(date +"%Y_%m_%d_%H%M%S").log"
 qemu-system-x86_64 \
     -enable-kvm \
-    -m ${RAM_MB} \
-    -smp ${VCPUS} \
+    -m "$RAM_MB" \
+    -smp "$VCPUS" \
     -drive file="${DISK_IMAGE}",format=qcow2,if=virtio \
     -cdrom "${CLOUD_INIT_ISO}" \
     -boot d \
@@ -184,10 +297,10 @@ qemu-system-x86_64 \
     -net nic \
     -fsdev local,id=host_out,path="${OUT_DIR}/..",security_model=passthrough \
     -device virtio-9p-pci,fsdev=host_out,mount_tag=host_out \
-    -fsdev local,id=host_drive,path="${SCRIPT_DIR}/host_drive",security_model=passthrough \
+    -fsdev local,id=host_drive,path="${TEST_DIR}/..",security_model=passthrough \
     -device virtio-9p-pci,fsdev=host_drive,mount_tag=host_drive \
     -nographic \
-    -pidfile vm.pid \
+    $QEMU_OPTS \
     2>&1 | tee "$VM_LOGS" &
 
 VM_PID=$!
@@ -337,7 +450,7 @@ REMOTE_EOF
 
     # Wait for SSH to go down (VM rebooting)
     for i in {1..30}; do
-        if ! nc -z $SSH_HOST $VM_SSH_PORT; then
+        if ! nc -z localhost 2222; then
             log "SSH is down; VM is rebooting."
             break
         fi
@@ -348,14 +461,14 @@ REMOTE_EOF
     wait_cloud_init
     # Wait for SSH to become available after reboot
     for i in {1..30}; do
-        if nc -z $SSH_HOST $VM_SSH_PORT; then
+        if nc -z localhost 2222; then
             log "SSH is available after reboot."
             break
         fi
         sleep 10
     done
 
-    if ! nc -z $SSH_HOST $VM_SSH_PORT; then
+    if ! nc -z localhost 2222; then
         log "Error: SSH did not become available after reboot."
         exit 1
     fi
@@ -393,7 +506,7 @@ EOF
         sudo mount -t 9p -o trans=virtio host_drive /home/user/host_drive
         exit  # Ensure SSH session exits
 EOF
-    log "VM is running. Connect via SSH with: ssh -p $VM_SSH_PORT ${SSH_USER}@$SSH_HOST"
+    log "VM is running. Connect via SSH with: ssh -p 2222 ${SSH_USER}@localhost"
 
     # Trigger tests if requested (no kernel install)
     if [ "$RUN_TESTS" == "true" ]; then
@@ -405,4 +518,4 @@ EOF
     fi
 fi
 
-echo "VM is running. SSH: ssh -i $SYZKALLER_SSH_KEY -p $VM_SSH_PORT $SSH_USER@$SSH_HOST"
+echo "VM is running. SSH: ssh -i $SYZKALLER_SSH_KEY -p 2222 $SSH_USER@localhost"
