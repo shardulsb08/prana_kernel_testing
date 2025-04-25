@@ -293,8 +293,6 @@ qemu-system-x86_64 \
     -drive file="${DISK_IMAGE}",format=qcow2,if=virtio \
     -cdrom "${CLOUD_INIT_ISO}" \
     -boot d \
-    -net user,host=10.0.2.10,hostfwd=${VM_HOSTFWD} \
-    -net nic \
     -fsdev local,id=host_out,path="${OUT_DIR}/..",security_model=passthrough \
     -device virtio-9p-pci,fsdev=host_out,mount_tag=host_out \
     -fsdev local,id=host_drive,path="${TEST_DIR}/..",security_model=passthrough \
