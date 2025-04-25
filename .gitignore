@@ -1,0 +1,118 @@
+# Build outputs and artifacts
+*.o
+*.ko
+*.mod
+*.mod.c
+*.mod.o
+*.order
+*.symvers
+*.cmd
+.tmp_versions/
+Module.symvers
+modules.order
+
+# VM and disk images
+*.qcow2
+*.img
+*.iso
+*.vmdk
+*.vdi
+cloud_init_checksums.txt
+
+# Build directories
+build_input/
+out/
+headers.tmp/
+container_kernel_workspace/out/
+
+# Temporary and cache files
+*.tmp
+*.swp
+*.swo
+.*.swp
+.*.swo
+*~
+.cache/
+
+# Log files
+*.log
+vm_*.log
+
+# Python-related
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Go-related
+bin/
+pkg/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# OS-specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Project-specific directories
+archives/
+host_drive/tests/syzkaller/
+workdir/
+
+# Container and environment files
+.env
+*.env
+.env.*
+
+# Kernel specific
+*.dtb
+*.dtbo
+vmlinux
+vmlinuz*
+initrd*
+config-*
+System.map*
+
+# Temporary kernel build files
+*.o.d
+*.ko.cmd
+.config
+.config.old
+include/config/
+include/generated/
+arch/*/include/generated/
+
+# Keep these files
+!.gitignore
+!.gitattributes
+!README.md
+!LICENSE
+!docs/
+!configs/
+!infrastructure/
+!infrastructure/**/* 
