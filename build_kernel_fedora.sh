@@ -297,4 +297,21 @@ cp .config "$OUT_DIR/config-${FULL_KVER}"
 log "Installing kernel modules into ${OUT_DIR}..."
 make modules_install INSTALL_MOD_PATH="$OUT_DIR"
 
+# Install kernel headers (userspace)
+log "Installing kernel headers to $OUT_DIR..."
+make headers_install INSTALL_HDR_PATH="$OUT_DIR/usr"
+
+# Copy additional kernel headers for module building
+log "Copying additional kernel headers for module building..."
+mkdir -p "$OUT_DIR/usr/src/linux-headers-$FULL_KVER"
+cp -a include "$OUT_DIR/usr/src/linux-headers-$FULL_KVER"
+mkdir -p "$OUT_DIR/usr/src/linux-headers-$FULL_KVER/arch/x86"
+cp -a arch/x86/include "$OUT_DIR/usr/src/linux-headers-$FULL_KVER/arch/x86"
+cp -a scripts "$OUT_DIR/usr/src/linux-headers-$FULL_KVER"
+cp .config "$OUT_DIR/usr/src/linux-headers-$FULL_KVER"
+if [ -f Module.symvers ]; then
+  cp Module.symvers "$OUT_DIR/usr/src/linux-headers-$FULL_KVER"
+fi
+find . -name "Makefile*" -o -name "Kconfig*" | cpio -pd "$OUT_DIR/usr/src/linux-headers-$FULL_KVER"
+
 log "Kernel build complete. Artifacts are available in ${OUT_DIR}."
