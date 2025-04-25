@@ -370,11 +370,9 @@ log "Detected custom kernel version: $KVER"
 # Write KVER to a file in the shared folder
 echo "$KVER" > /host_out/out/kver.txt
 
-#ARTIFACT_DIR="/host_out/out/kernel_artifacts/v${KVER}"
-#if [ ! -f "${ARTIFACT_DIR}/vmlinuz-${KVER}" ]; then
-#    log "Error: Kernel image not found at ${ARTIFACT_DIR}/vmlinuz-${KVER}"
-#    exit 1
-#fi
+# Update the spec file version
+sed -i "s/^Version:.*/Version:        $KVER/" /host_out/dummy-kernel-headers.spec
+sed -i "s/dummy-kernel-headers-[0-9.]*-/dummy-kernel-headers-$KVER-/" /host_out/dummy-kernel-headers.spec
 
 log "Retrieving UUID of the root filesystem..."
 ROOT_DEVICE=$(findmnt -n -o SOURCE --target / | sed 's/\[.*\]//')
@@ -405,7 +403,7 @@ mkdir -p ~/rpmbuild/SPECS
 cp /host_out/dummy-kernel-headers.spec ~/rpmbuild/SPECS/
 
 rpmbuild -ba ~/rpmbuild/SPECS/dummy-kernel-headers.spec
-sudo dnf install -y ~/rpmbuild/RPMS/noarch/dummy-kernel-headers-6.14.0-1.noarch.rpm
+sudo dnf install -y ~/rpmbuild/RPMS/noarch/dummy-kernel-headers-${KVER}-1*.noarch.rpm
 
 log "Generating initramfs for the new kernel..."
 # Update dracut configuration for the correct drivers and filesystem
