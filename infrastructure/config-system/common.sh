@@ -25,8 +25,10 @@ set -euo pipefail
 __COMMON_CONFIG_SH=1
 
 # Determine script directory for consistent paths
+TMP_SCRIPT_DIR=$SCRIPT_DIR
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." &>/dev/null && pwd)"
+SCRIPT_DIR=$TMP_SCRIPT_DIR
 
 # Common configuration settings
 readonly CONFIG_MODES=(LOCAL SYZKALLER SYZGEN)
