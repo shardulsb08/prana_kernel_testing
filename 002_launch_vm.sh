@@ -91,6 +91,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 # Source common functions and variables
 source "$SCRIPT_DIR/common.sh"
 
+# Source network configuration
+source "$SCRIPT_DIR/infrastructure/network/config.sh"
+source "$SCRIPT_DIR/infrastructure/network/syzkaller.sh"
+source "$SCRIPT_DIR/infrastructure/network/syzgen.sh"
+
+# Configure network based on SYZKALLER_SETUP
+case "${SYZKALLER_SETUP:-LOCAL}" in
+    "SYZGEN")
+        setup_syzgen_network
+        ;;
+    "SYZKALLER")
+        setup_syzkaller_network
+        ;;
+    *)
+        setup_network_config "LOCAL"
+        ;;
+esac
+
 # ========= Configuration Variables =========
 VM_NAME="fedora-vm"
 DISK_IMAGE="$SCRIPT_DIR/fedora_vm.qcow2"
@@ -257,10 +275,21 @@ rm -rf "$SCRIPT_DIR/cloudinit"
 log "Launching QEMU VM with ${RAM_MB}MB RAM and ${VCPUS} vCPUs..."
 
 VM_LOGS="vm_$(date +"%Y_%m_%d_%H%M%S").log"
+
+# Use the configured network settings
+SSH_PORT="$VM_SSH_PORT"
+SSH_HOST="$SSH_HOST"
+VM_NET_CONFIG="$VM_HOSTFWD"
+
+# Update QEMU network configuration
+QEMU_OPTS="-netdev user,id=user.0,hostfwd=${VM_NET_CONFIG} \
+           -device virtio-net-pci,netdev=user.0"
+
+VM_LOGS="vm_$(date +"%Y_%m_%d_%H%M%S").log"
 qemu-system-x86_64 \
     -enable-kvm \
-    -m ${RAM_MB} \
-    -smp ${VCPUS} \
+    -m "$RAM_MB" \
+    -smp "$VCPUS" \
     -drive file="${DISK_IMAGE}",format=qcow2,if=virtio \
     -cdrom "${CLOUD_INIT_ISO}" \
     -boot d \
@@ -268,9 +297,10 @@ qemu-system-x86_64 \
     -net nic \
     -fsdev local,id=host_out,path="${OUT_DIR}/..",security_model=passthrough \
     -device virtio-9p-pci,fsdev=host_out,mount_tag=host_out \
-    -fsdev local,id=host_drive,path="${SCRIPT_DIR}/host_drive",security_model=passthrough \
+    -fsdev local,id=host_drive,path="${TEST_DIR}/..",security_model=passthrough \
     -device virtio-9p-pci,fsdev=host_drive,mount_tag=host_drive \
     -nographic \
+    $QEMU_OPTS \
     2>&1 | tee "$VM_LOGS" &
 
 VM_PID=$!
@@ -316,6 +346,10 @@ set -euo pipefail
 log() {
     echo -e "\n\e[34m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
 }
+
+log "dnf update to get latest packages"
+sudo dnf -y update
+sudo dnf install -y rpmbuild
 
 log "Ensuring shared folder is mounted at /host_out..."
 if ! mountpoint -q /host_out; then
@@ -363,6 +397,12 @@ sudo cp "${ARTIFACT_DIR}/config-${KVER}" "/boot/config-${KVER}" || { log "Failed
 log "Installing kernel modules..."
 sudo mkdir -p /lib/modules/$KVER
 sudo cp -r "${ARTIFACT_DIR}/lib/modules/$KVER/"* "/lib/modules/$KVER/" || { log "Failed to copy kernel modules"; exit 1; }
+
+log "Installing kernel headers..."
+sudo mkdir -p /usr/src/kernels/$KVER/usr
+sudo cp -r "${ARTIFACT_DIR}/include" "/usr/src/kernels/$KVER/usr/" || { log "Failed to copy kernel modules"; exit 1; }
+rpmbuild -ba ~/rpmbuild/SPECS/dummy-kernel-headers.spec
+sudo dnf install -y ~/rpmbuild/RPMS/noarch/dummy-kernel-headers-6.14.0-1.noarch.rpm
 
 log "Generating initramfs for the new kernel..."
 # Update dracut configuration for the correct drivers and filesystem
