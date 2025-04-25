@@ -5,15 +5,23 @@
 # Determine the script's directory for consistent file paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
-# Source network configuration
-source "$SCRIPT_DIR/infrastructure/network/config.sh"
-
 # Default SSH credentials
 SSH_USER="user"
 SSH_PASS="fedora"    # Default password (set in cloud-init)
 
-# Set default network configuration
+# Source network configuration
+source "$SCRIPT_DIR/infrastructure/network/config.sh"
+source "$SCRIPT_DIR/infrastructure/network/syzkaller.sh"
+source "$SCRIPT_DIR/infrastructure/network/syzgen.sh"
+
+# Source kernel configuration
+source "$SCRIPT_DIR/infrastructure/kernel/config.sh"
+source "$SCRIPT_DIR/infrastructure/kernel/syzkaller.sh"
+source "$SCRIPT_DIR/infrastructure/kernel/syzgen.sh"
+
+# Set default configurations
 setup_network_config "LOCAL"
+setup_kernel_config "LOCAL"
 
 OUT_DIR="$SCRIPT_DIR/container_kernel_workspace/out"  # Directory with kernel artifacts
 
