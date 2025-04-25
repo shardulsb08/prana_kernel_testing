@@ -402,7 +402,7 @@ sudo cp -r "${ARTIFACT_DIR}/include" "/usr/src/kernels/$KVER/usr/" || { log "Fai
 
 # Ensure rpmbuild SPECS directory exists and copy spec file
 mkdir -p ~/rpmbuild/SPECS
-cp /host_drive/dummy-kernel-headers.spec ~/rpmbuild/SPECS/
+cp /host_out/dummy-kernel-headers.spec ~/rpmbuild/SPECS/
 
 rpmbuild -ba ~/rpmbuild/SPECS/dummy-kernel-headers.spec
 sudo dnf install -y ~/rpmbuild/RPMS/noarch/dummy-kernel-headers-6.14.0-1.noarch.rpm
