@@ -97,6 +97,20 @@ mkdir -p "$KERNEL_OUT"
 log "Installing kernel modules to $KERNEL_OUT..."
 make modules_install INSTALL_MOD_PATH="$KERNEL_OUT"
 
+# Install kernel headers
+log "Installing kernel headers to $KERNEL_OUT..."
+make headers_install INSTALL_HDR_PATH="$KERNEL_OUT/usr"
+
+# Copy additional header files needed for module building
+log "Copying additional kernel headers for module building..."
+mkdir -p "$KERNEL_OUT/usr/src/linux-headers-$LATEST_VERSION"
+cp -a include "$KERNEL_OUT/usr/src/linux-headers-$LATEST_VERSION"
+cp -a arch/x86/include "$KERNEL_OUT/usr/src/linux-headers-$LATEST_VERSION/arch/x86"
+cp -a scripts "$KERNEL_OUT/usr/src/linux-headers-$LATEST_VERSION"
+cp .config "$KERNEL_OUT/usr/src/linux-headers-$LATEST_VERSION"
+cp Module.symvers "$KERNEL_OUT/usr/src/linux-headers-$LATEST_VERSION"
+find . -name "Makefile*" -o -name "Kconfig*" | cpio -pd "$KERNEL_OUT/usr/src/linux-headers-$LATEST_VERSION"
+
 # Copy the kernel binary
 if [[ -f "arch/x86/boot/$KERNEL_BUILD_TARGET" ]]; then
   log "Copying kernel image to artifacts directory..."

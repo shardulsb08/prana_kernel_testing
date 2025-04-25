@@ -395,15 +395,51 @@ sudo mkdir -p /lib/modules/$KVER
 sudo cp -r "${ARTIFACT_DIR}/lib/modules/$KVER/"* "/lib/modules/$KVER/" || { log "Failed to copy kernel modules"; exit 1; }
 
 log "Installing kernel headers..."
-sudo mkdir -p /usr/src/kernels/$KVER/usr
-sudo cp -r "${ARTIFACT_DIR}/include" "/usr/src/kernels/$KVER/usr/" || { log "Failed to copy kernel modules"; exit 1; }
+# Install standard kernel headers
+sudo mkdir -p /usr/src/kernels/$KVER
+sudo cp -r "${ARTIFACT_DIR}/usr/src/linux-headers-${KVER}/"* "/usr/src/kernels/$KVER/" || { log "Failed to copy kernel headers"; exit 1; }
 
-# Ensure rpmbuild SPECS directory exists and copy spec file
+# Install userspace headers
+sudo cp -r "${ARTIFACT_DIR}/usr/include" "/usr/" || { log "Failed to copy userspace headers"; exit 1; }
+
+# Create symlinks for compatibility
+sudo ln -sf "/usr/src/kernels/$KVER" "/lib/modules/$KVER/build"
+sudo ln -sf "/usr/src/kernels/$KVER" "/lib/modules/$KVER/source"
+
+# Update kernel header package
 mkdir -p ~/rpmbuild/SPECS
 cp /host_out/dummy-kernel-headers.spec ~/rpmbuild/SPECS/
 
+# Build and install the dummy package to prevent conflicts
 rpmbuild -ba ~/rpmbuild/SPECS/dummy-kernel-headers.spec
 sudo dnf install -y ~/rpmbuild/RPMS/noarch/dummy-kernel-headers-${KVER}-1*.noarch.rpm
+
+# Verify header installation
+log "Verifying kernel header installation..."
+if [ ! -d "/usr/src/kernels/$KVER" ]; then
+    log_error "Kernel headers not found in /usr/src/kernels/$KVER"
+    exit 1
+fi
+
+if [ ! -L "/lib/modules/$KVER/build" ]; then
+    log_error "Kernel build symlink not found"
+    exit 1
+fi
+
+# Test header usability
+log "Testing kernel header usability..."
+cat > /tmp/test.c <<EOF
+#include <linux/kernel.h>
+#include <linux/module.h>
+int main() { return 0; }
+EOF
+
+if ! gcc -I"/usr/src/kernels/$KVER/include" -c /tmp/test.c -o /tmp/test.o 2>/dev/null; then
+    log_error "Failed to compile test program with kernel headers"
+    exit 1
+fi
+
+log "Kernel headers installed and verified successfully"
 
 log "Generating initramfs for the new kernel..."
 # Update dracut configuration for the correct drivers and filesystem
