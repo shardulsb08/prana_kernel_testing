@@ -4,16 +4,8 @@ set -euo pipefail
 # Determine the script's directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
-# Source common functions and variables
+# Source common functions and variables (which includes all configurations)
 source "$SCRIPT_DIR/common.sh"
-
-# Source configuration modules
-source "$SCRIPT_DIR/infrastructure/network/config.sh"
-source "$SCRIPT_DIR/infrastructure/network/syzkaller.sh"
-source "$SCRIPT_DIR/infrastructure/network/syzgen.sh"
-source "$SCRIPT_DIR/infrastructure/kernel/config.sh"
-source "$SCRIPT_DIR/infrastructure/kernel/syzkaller.sh"
-source "$SCRIPT_DIR/infrastructure/kernel/syzgen.sh"
 
 # Configuration
 TEST_CONFIG="$SCRIPT_DIR/host_drive/tests/test_config.txt"  # Path on host (adjusted for VM context)
