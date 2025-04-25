@@ -1,128 +1,115 @@
 # Branching Strategy
 
-This document outlines the branching strategy for the kernel testing framework.
+This document outlines the branching strategy used in this project.
 
-## Branch Structure
+## Main Branches
 
+### main
+- The primary branch containing production-ready code
+- Always stable and deployable
+- Protected branch - requires code review and CI passing
+- No direct commits allowed
+
+### development
+- Integration branch for feature development
+- Code here is in a pre-release state
+- Merges into main when stable
+- Regular integration testing performed
+
+## Feature Branches
+
+### Format
+Feature branches follow the naming convention:
 ```
-main
-  └── syzkaller_descriptions
-        └── gerrit/*
+<type>/<description>
 ```
 
-- `main`: Base branch containing all shared code and documentation
-- `syzkaller_descriptions`: Feature branch for syzkaller-specific changes
-- `gerrit/*`: Individual branches for Gerrit code reviews
+Where `type` is one of:
+- `feature/` - New features
+- `bugfix/` - Bug fixes
+- `hotfix/` - Critical fixes for production
+- `release/` - Release preparation
+- `infrastructure/` - Infrastructure changes
+- `docs/` - Documentation updates
+
+### Examples
+- `feature/add-new-test-framework`
+- `bugfix/fix-vm-networking`
+- `infrastructure/restructure-codebase`
+- `docs/add-documentation`
 
 ## Workflow
 
-### 1. Regular Development
+1. Create feature branch from development
+2. Develop and test changes
+3. Create pull request to development
+4. Code review and CI checks
+5. Merge to development
+6. Periodic releases from development to main
 
-```bash
-# Start from main
-git checkout main
-git pull origin main
+## Release Process
 
-# Create feature branch
-git checkout -b feature/name
-# Make changes
-git commit
-git push origin feature/name
-```
+1. Create release branch from development
+2. Version bump and changelog updates
+3. Final testing and fixes
+4. Merge to main with tag
+5. Backport critical fixes to main if needed
 
-### 2. Syzkaller Development
+## Hotfix Process
 
-```bash
-# Update main
-git checkout main
-git pull origin main
+1. Create hotfix branch from main
+2. Fix critical issue
+3. Merge to main and development
+4. Create new release tag
 
-# Update syzkaller_descriptions
-git checkout syzkaller_descriptions
-git rebase main
-git push origin syzkaller_descriptions
+## Branch Protection
 
-# Create Gerrit change
-git checkout -b gerrit/feature-name syzkaller_descriptions
-# Make changes
-git commit
-git push origin HEAD:refs/for/syzkaller_descriptions
-```
+### main
+- Requires pull request
+- Requires code review approval
+- Must pass CI checks
+- No direct commits
 
-### 3. Maintaining Synchronization
-
-```bash
-# After main is updated
-git checkout main
-git pull origin main
-git checkout syzkaller_descriptions
-git rebase main
-git push -f origin syzkaller_descriptions
-
-# After Gerrit changes are merged
-git checkout syzkaller_descriptions
-git pull origin syzkaller_descriptions
-git rebase main
-git push -f origin syzkaller_descriptions
-```
+### development
+- Requires pull request
+- Must pass CI checks
+- Code review recommended
 
 ## Best Practices
 
-1. **Always Branch from Latest**:
-   - Keep `main` up-to-date
-   - Rebase feature branches regularly
+1. Keep branches focused and short-lived
+2. Regular rebasing with parent branch
+3. Descriptive commit messages
+4. Clean commit history
+5. Delete branches after merging
 
-2. **Clean Commits**:
-   - One logical change per commit
-   - Clear commit messages
-   - No merge commits in Gerrit changes
+## Commit Messages
 
-3. **Branch Naming**:
-   - `feature/*`: Regular features
-   - `bugfix/*`: Bug fixes
-   - `gerrit/*`: Gerrit changes
-   - `docs/*`: Documentation updates
+Format:
+```
+<type>: <subject>
 
-4. **Conflict Resolution**:
-   - Resolve conflicts in feature branches
-   - Keep rebasing instead of merging
-   - Document complex conflict resolutions
+[optional body]
 
-## Common Commands
-
-### Setup New Feature
-```bash
-git checkout main
-git pull
-git checkout -b feature/name
-# Make changes
-git commit -m "feat: description"
-git push origin feature/name
+[optional footer]
 ```
 
-### Update Syzkaller Branch
-```bash
-git checkout main
-git pull
-git checkout syzkaller_descriptions
-git rebase main
-git push -f origin syzkaller_descriptions
-```
+Types:
+- feat: New feature
+- fix: Bug fix
+- docs: Documentation
+- style: Formatting
+- refactor: Code restructuring
+- test: Adding tests
+- chore: Maintenance
 
-### Create Gerrit Change
-```bash
-git checkout syzkaller_descriptions
-git pull
-git checkout -b gerrit/feature-name
-# Make changes
-git commit -m "feat: description"
-git push origin HEAD:refs/for/syzkaller_descriptions
+Example:
 ```
+feat: Add new VM network configuration
 
-### Cleanup After Merge
-```bash
-git checkout main
-git pull
-git branch -d feature/name  # Delete local branch
-git push origin --delete feature/name  # Delete remote branch
+- Added support for custom network bridges
+- Updated documentation
+- Added unit tests
+
+Fixes #123
 ``` 

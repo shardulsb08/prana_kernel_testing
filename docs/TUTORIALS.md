@@ -1,215 +1,223 @@
-# Development Tutorials
+# Tutorials
 
-This document provides step-by-step tutorials for common development tasks in the kernel testing framework.
+This document provides step-by-step tutorials for common tasks in the kernel testing framework.
 
 ## Table of Contents
-1. [Adding a New Kernel Test](#adding-a-new-kernel-test)
-2. [Modifying Kernel Configuration](#modifying-kernel-configuration)
-3. [Debugging Test Failures](#debugging-test-failures)
-4. [Working with Syzkaller](#working-with-syzkaller)
-5. [Custom Network Configuration](#custom-network-configuration)
 
-## Adding a New Kernel Test
+1. [Setting Up the Environment](#setting-up-the-environment)
+2. [Building a Custom Kernel](#building-a-custom-kernel)
+3. [Running Tests](#running-tests)
+4. [Using SyzGen++](#using-syzgen)
+5. [Using Syzkaller](#using-syzkaller)
+6. [Debugging Issues](#debugging-issues)
 
-### Example: Adding Memory Leak Test
+## Setting Up the Environment
 
-1. **Create the test script**:
-   ```bash
-   # host_drive/tests/003_memory_leak_test.sh
-   #!/bin/bash
+### Prerequisites
+```bash
+# Install required packages
+sudo apt-get update
+sudo apt-get install -y \
+    qemu-system-x86 \
+    docker.io \
+    python3-pip \
+    git
 
-   log() {
-       echo -e "\n\e[34m[$(date +"%Y-%m-%d %H:%M:%S")] $*\e[0m\n"
-   }
+# Clone the repository
+git clone https://github.com/your-org/prana_kernel_testing.git
+cd prana_kernel_testing
 
-   # Enable kernel memory leak detection
-   log "Enabling kmemleak..."
-   echo scan > /sys/kernel/debug/kmemleak
+# Setup configuration
+cp config.example config
+```
 
-   # Wait for initial scan
-   sleep 30
+### Container Setup
+```bash
+# Build the container
+./001_run_build_fedora.sh --build-only
 
-   # Check for leaks
-   log "Checking for memory leaks..."
-   LEAKS=$(cat /sys/kernel/debug/kmemleak)
+# Start persistent container
+./001_run_persistent_container.sh
+```
 
-   if [ -n "$LEAKS" ]; then
-       log "Memory leaks detected:"
-       echo "$LEAKS"
-       exit 1
-   else
-       log "No memory leaks found."
-       exit 0
-   fi
-   ```
+## Building a Custom Kernel
 
-2. **Update test configuration**:
-   ```bash
-   # host_drive/tests/test_config.txt
-   smoke_test
-   memory_leak_test
-   syzkaller
-   ```
+### Basic Build
+```bash
+# Configure kernel
+./build_kernel_fedora.sh --configure
 
-3. **Add test handler in `003_run_tests.sh`**:
-   ```bash
-   case "$test_name" in
-       memory_leak_test)
-           log "Running memory leak test..."
-           chmod +x $VM_TESTS_DIR/003_memory_leak_test.sh
-           $VM_TESTS_DIR/003_memory_leak_test.sh
-           ;;
-   esac
-   ```
+# Build kernel
+./build_kernel_fedora.sh --build
 
-## Modifying Kernel Configuration
+# Clean build artifacts
+./clear_kernel_out.sh
+```
 
-### Example: Adding New Debug Features
+### Custom Configuration
+```bash
+# Edit kernel config
+vim configs/kernel/config-base
 
-1. **Create custom config file**:
-   ```bash
-   # build_input/debug_features.config
-   CONFIG_DEBUG_INFO=y
-   CONFIG_DEBUG_INFO_DWARF4=y
-   CONFIG_GDB_SCRIPTS=y
-   CONFIG_DEBUG_KERNEL=y
-   CONFIG_DEBUG_PAGEALLOC=y
-   CONFIG_DEBUG_OBJECTS=y
-   CONFIG_DEBUG_OBJECTS_FREE=y
-   CONFIG_DEBUG_OBJECTS_TIMERS=y
-   ```
+# Apply custom patches
+cp your-patch.diff lockdep.diff
+./build_kernel_fedora.sh --patch
 
-2. **Update build script**:
-   ```bash
-   # build_kernel_fedora.sh
-   if [ -f /build_input/debug_features.config ]; then
-       log "Applying debug features configuration..."
-       apply_kernel_configs /build_input/debug_features.config
-   fi
-   ```
+# Build with custom config
+./build_kernel_fedora.sh --config custom_config
+```
 
-## Debugging Test Failures
+## Running Tests
 
-### Example: Debugging Smoke Test Failures
+### Basic Testing
+```bash
+# Launch VM
+./002_launch_vm.sh
 
-1. **Enable verbose logging**:
-   ```bash
-   # host_drive/tests/001_kernel_smoke_test.sh
-   export DEBUG=1
+# Run basic tests
+./003_run_tests.sh --basic
 
-   debug_log() {
-       if [ "$DEBUG" = "1" ]; then
-           echo "[DEBUG] $*" >> /tmp/smoke_test_debug.log
-       fi
-   }
+# Run all tests
+./003_run_tests.sh --all
+```
 
-   # Add debug logs
-   debug_log "Checking kernel version: $(uname -r)"
-   debug_log "Kernel config: $(zcat /proc/config.gz)"
-   ```
+### Custom Test Suite
+```bash
+# Create test directory
+mkdir -p host_drive/tests/custom_suite
 
-2. **Check logs in VM**:
-   ```bash
-   # From host
-   ssh -p 2222 user@localhost 'cat /tmp/smoke_test_debug.log'
+# Add test files
+cp your_tests/* host_drive/tests/custom_suite/
 
-   # Or use the vm_ssh function
-   vm_ssh "cat /tmp/smoke_test_debug.log"
-   ```
+# Run custom suite
+./003_run_tests.sh --suite custom_suite
+```
 
-## Working with Syzkaller
+## Using SyzGen++
 
-### Example: Custom Syscall Coverage
+### Setup
+```bash
+# Initialize SyzGen++
+cd SyzGenPlusPlus
+./setup.sh
 
-1. **Create syscall allowlist**:
-   ```bash
-   # host_drive/tests/syzkaller/allowlist.txt
-   # Only fuzz these syscalls
-   read
-   write
-   open
-   close
-   socket
-   connect
-   ```
+# Configure target
+vim config/target.json
 
-2. **Update Syzkaller config**:
-   ```bash
-   # host_drive/tests/002_run_syzkaller.sh
-   cat > "$SYZKALLER_CONFIG" <<EOF
-   {
-       "target": "linux/amd64",
-       "http": ":$HTTP_PORT",
-       "workdir": "$SYZKALLER_DIR/syzkaller_workdir",
-       "kernel_obj": "$KERNEL_BUILD_DIR",
-       "syzkaller": "$SYZKALLER_BIN_DIR",
-       "enable_syscalls": [
-           $(tr '\n' ',' < "$SYZKALLER_DIR/allowlist.txt" | sed 's/,$//')
-       ],
-       "procs": 8,
-       "type": "isolated",
-       "vm": {
-           "targets": ["localhost:2222"],
-           "target_dir": "/tmp/syzkaller"
-       }
-   }
-   EOF
-   ```
+# Build tools
+make tools
+```
 
-3. **Monitor specific syscalls**:
-   ```bash
-   # Watch coverage for specific syscalls
-   watch -n 5 'curl -s http://localhost:$HTTP_PORT/cover | grep -A 5 "read\|write"'
-   ```
+### Running Analysis
+```bash
+# Start analysis
+./syzgen analyze --target linux
 
-## Custom Network Configuration
+# Generate syscall descriptions
+./syzgen generate --output descriptions
 
-### Example: Adding New Network Mode
+# Validate descriptions
+./syzgen validate --input descriptions
+```
 
-1. **Update common.sh**:
-   ```bash
-   # common.sh
-   CUSTOM_MODE_VM_PORT=2025
-   CUSTOM_MODE_SSH_HOST="192.168.1.100"
-   CUSTOM_MODE_VM_HOSTFWD="tcp::2025-:22"
+## Using Syzkaller
 
-   # Update VM_SSH_PORT calculation
-   case "$SYZKALLER_SETUP" in
-       "SYZKALLER_LOCAL")
-           VM_SSH_PORT=$SYZKALLER_LOCAL_VM_PORT
-           ;;
-       "SYZKALLER_SYZGEN")
-           VM_SSH_PORT=$SYZKALLER_SYZGEN_VM_PORT
-           ;;
-       "CUSTOM_MODE")
-           VM_SSH_PORT=$CUSTOM_MODE_VM_PORT
-           ;;
-   esac
-   ```
+### Configuration
+```bash
+# Setup syzkaller config
+cp tools/syzkaller/config/config.example config/syzkaller.cfg
 
-2. **Use in VM launch**:
-   ```bash
-   # 002_launch_vm.sh
-   export SYZKALLER_SETUP="CUSTOM_MODE"
-   ./002_launch_vm.sh --install-kernel
-   ```
+# Edit configuration
+vim config/syzkaller.cfg
 
-## Tips and Best Practices
+# Verify setup
+./tools/syzkaller/check_setup.sh
+```
 
-1. **Test Development**:
-   - Always add debug logging
-   - Include cleanup in case of failures
-   - Add timeouts for hanging operations
-   - Validate prerequisites before test
+### Running Fuzzer
+```bash
+# Start fuzzing
+./tools/syzkaller/run.sh --config config/syzkaller.cfg
 
-2. **Kernel Configuration**:
-   - Keep configs modular
-   - Document dependencies
-   - Test configs in isolation
-   - Use `make nconfig` for exploration
+# Monitor progress
+./tools/syzkaller/monitor.sh
 
-3. **Network Setup**:
-   - Test connectivity both ways
-   - Add timeout to connection attempts
-   - Log network operations
-   - Handle connection failures gracefully
+# Collect results
+./tools/syzkaller/collect_crashes.sh
+```
+
+## Debugging Issues
+
+### VM Issues
+```bash
+# Check VM logs
+tail -f vm_*.log
+
+# Debug VM boot
+./002_launch_vm.sh --debug
+
+# Check network
+./tools/common/utils/check_network.sh
+```
+
+### Kernel Issues
+```bash
+# Enable kernel debug
+./build_kernel_fedora.sh --debug
+
+# Analyze crash dumps
+./tools/common/utils/analyze_crash.sh dumps/crash.log
+
+# Check kernel logs
+./tools/common/utils/fetch_kernel_logs.sh
+```
+
+### Container Issues
+```bash
+# Check container logs
+docker logs kernel-build-container
+
+# Enter container shell
+./001_exec_container.sh
+
+# Rebuild container
+./001_run_build_fedora.sh --rebuild
+```
+
+## Tips and Tricks
+
+### Performance Optimization
+```bash
+# Parallel kernel build
+./build_kernel_fedora.sh --jobs $(nproc)
+
+# Optimize VM memory
+./002_launch_vm.sh --memory 4G
+
+# Cache build artifacts
+export CCACHE_DIR=/path/to/cache
+```
+
+### Development Workflow
+```bash
+# Quick test cycle
+./tools/common/utils/quick_test.sh
+
+# Development environment
+./001_exec_container.sh --dev
+
+# Clean environment
+./tools/common/utils/clean_all.sh
+```
+
+### Troubleshooting
+```bash
+# Check system requirements
+./tools/common/utils/check_requirements.sh
+
+# Verify configurations
+./tools/common/utils/verify_config.sh
+
+# Generate debug info
+./tools/common/utils/collect_debug_info.sh
+```
