@@ -2,10 +2,50 @@
 set -euo pipefail
 trap 'echo "Error occurred at line ${LINENO}. Exiting." >&2' ERR
 
+# Determine script directory and source configurations
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+source "$SCRIPT_DIR/infrastructure/kernel/config.sh"
+source "$SCRIPT_DIR/infrastructure/kernel/syzkaller.sh"
+source "$SCRIPT_DIR/infrastructure/kernel/syzgen.sh"
+
 # Function to print messages
 log() {
   echo "[`date +"%Y-%m-%d %H:%M:%S"`] $*"
 }
+
+# Parse command line arguments for build mode
+BUILD_MODE="LOCAL"
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --mode)
+      BUILD_MODE="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown option: $1"
+      echo "Usage: $0 [--mode LOCAL|SYZKALLER|SYZGEN]"
+      exit 1
+      ;;
+  esac
+done
+
+# Setup kernel configuration based on mode
+case $BUILD_MODE in
+  "SYZKALLER")
+    setup_syzkaller_kernel
+    ;;
+  "SYZGEN")
+    setup_syzgen_kernel
+    ;;
+  "LOCAL")
+    setup_kernel_config "LOCAL"
+    ;;
+  *)
+    echo "Invalid build mode: $BUILD_MODE"
+    echo "Valid modes: LOCAL, SYZKALLER, SYZGEN"
+    exit 1
+    ;;
+esac
 
 # 1. Fetch the latest stable Linux kernel version dynamically
 log "Fetching latest stable Linux kernel version from kernel.org..."
@@ -35,42 +75,39 @@ tar -xf "linux-${LATEST_VERSION}.tar.xz"
 # Change into the kernel source directory
 cd "linux-${LATEST_VERSION}"
 
-# 4. Configure the kernel with default settings (defconfig)
-log "Running 'make defconfig' to set up default configuration..."
-make defconfig
+# 4. Configure the kernel based on mode
+log "Configuring kernel for ${BUILD_MODE} mode..."
+if [[ -f "$KERNEL_CONFIG_DIR/$KERNEL_CONFIG_FILE" ]]; then
+  cp "$KERNEL_CONFIG_DIR/$KERNEL_CONFIG_FILE" .config
+  make olddefconfig
+else
+  log "Warning: Config file not found at $KERNEL_CONFIG_DIR/$KERNEL_CONFIG_FILE"
+  log "Falling back to defconfig..."
+  make defconfig
+fi
 
 # 5. Compile the kernel using all available cores
 log "Starting kernel compilation with $(nproc) parallel jobs..."
-make -j"$(nproc)"
+make -j"$(nproc)" "$KERNEL_BUILD_TARGET"
 
 # 6. Prepare kernel artifacts for installation
-# Create a directory to store artifacts
-cd ..
-mkdir -p kernel_artifacts
+mkdir -p "$KERNEL_OUT"
 
-# Install modules into the artifact directory
-log "Installing kernel modules to ./kernel_artifacts/ ..."
-cd "linux-${LATEST_VERSION}"
-make modules_install INSTALL_MOD_PATH=../kernel_artifacts
+# Install modules
+log "Installing kernel modules to $KERNEL_OUT..."
+make modules_install INSTALL_MOD_PATH="$KERNEL_OUT"
 
-# Copy the kernel binary (for x86, typically located at arch/x86/boot/bzImage)
-if [ -f arch/x86/boot/bzImage ]; then
-  log "Copying kernel image (arch/x86/boot/bzImage) to artifacts directory..."
-  cp arch/x86/boot/bzImage ../kernel_artifacts/
+# Copy the kernel binary
+if [[ -f "arch/x86/boot/$KERNEL_BUILD_TARGET" ]]; then
+  log "Copying kernel image to artifacts directory..."
+  cp "arch/x86/boot/$KERNEL_BUILD_TARGET" "$KERNEL_OUT/"
 else
-  log "Warning: Kernel image not found at arch/x86/boot/bzImage. Skipping copy." >&2
+  log "Warning: Kernel image not found at arch/x86/boot/$KERNEL_BUILD_TARGET" >&2
 fi
 
-cd ..
+# Package artifacts
+log "Packaging kernel artifacts..."
+tar -czf "$KERNEL_OUT/kernel_artifacts.tar.gz" -C "$KERNEL_OUT" .
 
-# Package the compiled kernel artifacts (modules and kernel image) into a tar.gz file
-log "Packaging kernel artifacts into kernel_artifacts.tar.gz..."
-tar -czf kernel_artifacts.tar.gz -C kernel_artifacts .
-
-# 7. Create an 'out' directory for the host and move the outputs there
-log "Moving build artifacts to the output directory..."
-mkdir -p out
-mv kernel_artifacts kernel_artifacts.tar.gz out/
-
-log "Kernel build and packaging completed successfully."
-log "All build artifacts are available in the /build/out directory."
+log "Kernel build completed successfully for ${BUILD_MODE} mode."
+log "Build artifacts are available in $KERNEL_OUT"
