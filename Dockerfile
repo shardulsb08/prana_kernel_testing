@@ -23,6 +23,8 @@ RUN dnf -y update && \
         dracut \
         ccache \
         rsync  \
+        hostname \
+        dwarves \
         git && \
     dnf clean all
 

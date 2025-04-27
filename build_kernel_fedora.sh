@@ -279,39 +279,84 @@ scripts/config --file .config --enable CONFIG_IKCONFIG_PROC
 log "Updating kernel configuration with 'make olddefconfig'..."
 make olddefconfig
 
-# 4. Build the kernel image and modules with ccache
-log "Building kernel bzImage..."
-make CC="ccache gcc" -j"$(nproc)" bzImage
+# # 4. Build the kernel image and modules with ccache
+# log "Building kernel bzImage..."
+# make CC="ccache gcc" -j"$(nproc)" bzImage
+# 
+# log "Building kernel modules..."
+# make CC="ccache gcc" -j"$(nproc)" modules
+# 
+# # 5. Copy artifacts
+# OUT_DIR="/build/out/kernel_artifacts/v${FULL_KVER}"
+# mkdir -p "$OUT_DIR"
+# log "Copying kernel image (bzImage) to ${OUT_DIR}/vmlinuz-${FULL_KVER}..."
+# cp arch/x86/boot/bzImage "$OUT_DIR/vmlinuz-${FULL_KVER}"
+# cp .config "$OUT_DIR/config-${FULL_KVER}"
+# 
+# # Install modules
+# log "Installing kernel modules into ${OUT_DIR}..."
+# make modules_install INSTALL_MOD_PATH="$OUT_DIR"
 
-log "Building kernel modules..."
-make CC="ccache gcc" -j"$(nproc)" modules
-
-# 5. Copy artifacts
+# Build kernel-devel RPM using the kernel's built-in packaging
+log "Building kernel-devel RPM..."
+cd ..
+make -C linux -j"$(nproc)" binrpm-pkg
+cd linux
+# Find and copy the resulting RPMs to the artifact output directory
 OUT_DIR="/build/out/kernel_artifacts/v${FULL_KVER}"
-mkdir -p "$OUT_DIR"
-log "Copying kernel image (bzImage) to ${OUT_DIR}/vmlinuz-${FULL_KVER}..."
-cp arch/x86/boot/bzImage "$OUT_DIR/vmlinuz-${FULL_KVER}"
-cp .config "$OUT_DIR/config-${FULL_KVER}"
-
-# Install modules
-log "Installing kernel modules into ${OUT_DIR}..."
-make modules_install INSTALL_MOD_PATH="$OUT_DIR"
-
-# Install kernel headers (userspace)
-log "Installing kernel headers to $OUT_DIR..."
-make headers_install INSTALL_HDR_PATH="$OUT_DIR/usr"
-
-# Copy additional kernel headers for module building
-log "Copying additional kernel headers for module building..."
-mkdir -p "$OUT_DIR/usr/src/linux-headers-$FULL_KVER"
-cp -a include "$OUT_DIR/usr/src/linux-headers-$FULL_KVER"
-mkdir -p "$OUT_DIR/usr/src/linux-headers-$FULL_KVER/arch/x86"
-cp -a arch/x86/include "$OUT_DIR/usr/src/linux-headers-$FULL_KVER/arch/x86"
-cp -a scripts "$OUT_DIR/usr/src/linux-headers-$FULL_KVER"
-cp .config "$OUT_DIR/usr/src/linux-headers-$FULL_KVER"
-if [ -f Module.symvers ]; then
-  cp Module.symvers "$OUT_DIR/usr/src/linux-headers-$FULL_KVER"
+RPM_DIR="rpmbuild/RPMS/x86_64"
+if [ -d "$RPM_DIR" ]; then
+    log "Copying kernel RPMs to $OUT_DIR..."
+    cp $RPM_DIR/kernel-*.rpm "$OUT_DIR/" || log "No kernel RPMs found in $RPM_DIR"
+else
+    log "RPM directory $RPM_DIR not found; skipping RPM copy."
 fi
-find . -name "Makefile*" -o -name "Kconfig*" | cpio -pd "$OUT_DIR/usr/src/linux-headers-$FULL_KVER"
+
+# Commenting below headers installation process. It is not
+# standard and breaks things like below compilation test:
+# # Test header usability
+# log "Testing kernel header usability..."
+# cat > /tmp/test.c <<EOF
+# #include <linux/kernel.h>
+# #include <linux/module.h>
+# int main() { return 0; }
+# EOF
+# 
+# if ! gcc -I"/usr/src/kernels/$KVER/include" -c /tmp/test.c -o /tmp/test.o 2>/dev/null; then
+#     log "Failed to compile test program with kernel headers"
+#     exit 1
+# fi
+# Observed this error:
+#  In file included from /usr/src/kernels/6.14.4/include/linux/array_size.h:5,
+#                  from /usr/src/kernels/6.14.4/include/linux/kernel.h:16,
+#                  from /tmp/test.c:1:
+# /usr/src/kernels/6.14.4/include/linux/compiler.h:344:10: fatal error: asm/rwonce.h: No such file or directory
+#   344 | #include <asm/rwonce.h>
+#       |          ^~~~~~~~~~~~~~
+# compilation terminated.
+# 
+# Findings in VM:
+# [user@fedora-vm ~]$ find /usr/src/kernels/6.14.4/ -name "rwonce.h"
+# /usr/src/kernels/6.14.4/arch/x86/include/generated/asm/rwonce.h
+# /usr/src/kernels/6.14.4/include/asm-generic/rwonce.h
+# The header was expected to be available as a symlink, but due to the 
+# below process, it wasn't.
+
+# # Install kernel headers (userspace)
+# log "Installing kernel headers to $OUT_DIR..."
+# make headers_install INSTALL_HDR_PATH="$OUT_DIR/usr"
+# 
+# # Copy additional kernel headers for module building
+# log "Copying additional kernel headers for module building..."
+# mkdir -p "$OUT_DIR/usr/src/linux-headers-$FULL_KVER"
+# cp -a include "$OUT_DIR/usr/src/linux-headers-$FULL_KVER"
+# mkdir -p "$OUT_DIR/usr/src/linux-headers-$FULL_KVER/arch/x86"
+# cp -a arch/x86/include "$OUT_DIR/usr/src/linux-headers-$FULL_KVER/arch/x86"
+# cp -a scripts "$OUT_DIR/usr/src/linux-headers-$FULL_KVER"
+# cp .config "$OUT_DIR/usr/src/linux-headers-$FULL_KVER"
+# if [ -f Module.symvers ]; then
+#   cp Module.symvers "$OUT_DIR/usr/src/linux-headers-$FULL_KVER"
+# fi
+# find . -name "Makefile*" -o -name "Kconfig*" | cpio -pd "$OUT_DIR/usr/src/linux-headers-$FULL_KVER"
 
 log "Kernel build complete. Artifacts are available in ${OUT_DIR}."
