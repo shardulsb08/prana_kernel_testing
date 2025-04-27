@@ -1,16 +1,35 @@
-Name: dummy-kernel-headers
-Version: 6.14.0
-Release: 1
-Summary: Dummy kernel headers to satisfy dependencies
-License: GPL
-Provides: kernel-headers = %{version}-%{release}
-BuildArch: noarch
+Name:           dummy-kernel-headers
+Version:        0.0.0
+Release:        1%{?dist}
+Summary:        Dummy kernel headers package for testing
+Provides:       kernel-headers = %{version}-%{release}
+
+License:        GPL-2.0
+URL:            https://github.com/shardulsb08/prana_kernel_testing
+
+BuildArch:      noarch
 
 %description
-Dummy package to provide kernel-headers for custom kernel 6.14.0.
+This is a dummy package that provides kernel-headers to prevent conflicts
+with the system package during kernel testing.
+
+Note: The Version field is automatically updated to match the currently
+built kernel version during installation.
+
+%prep
+# Nothing to do
+
+%build
+# Nothing to do
 
 %install
-# No files to install, just providing metadata
+# Create directories
+mkdir -p %{buildroot}/usr/include
 
 %files
-# Empty
+%dir /usr/include
+
+%changelog
+* Thu Apr 25 2024 Shardul <shardul@example.com> - 0.0.0-1
+- Initial package for kernel testing
+- Version is dynamically updated during installation

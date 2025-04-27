@@ -255,14 +255,14 @@ if [ -f /build_input/test_config.txt ]; then
         if [ -f /build_input/kernel_syzgen_raw.config ]; then
             apply_kernel_configs /build_input/kernel_syzgen_raw.config
         else
-	    log "Error: /build_input/kernel_syzgen_raw.config not found"
+           log "Error: /build_input/kernel_syzgen_raw.config not found"
             exit 1
         fi
     elif grep -q '^syzgen_config_fuzz\b' /build_input/test_config.txt; then
         if [ -f /build_input/kernel_syzgen_fuzz.config ]; then
             apply_kernel_configs /build_input/kernel_syzgen_fuzz.config
         else
-	    log "Error: /build_input/kernel_syzgen_fuzz.config not found"
+           log "Error: /build_input/kernel_syzgen_fuzz.config not found"
             exit 1
         fi
     fi
@@ -279,24 +279,38 @@ scripts/config --file .config --enable CONFIG_IKCONFIG_PROC
 log "Updating kernel configuration with 'make olddefconfig'..."
 make olddefconfig
 
-# 4. Build the kernel image and modules with ccache
-log "Building kernel bzImage..."
-make CC="ccache gcc" -j"$(nproc)" bzImage
+# # 4. Build the kernel image and modules with ccache
+# log "Building kernel bzImage..."
+# make CC="ccache gcc" -j"$(nproc)" bzImage
+# 
+# log "Building kernel modules..."
+# make CC="ccache gcc" -j"$(nproc)" modules
+# 
+# # 5. Copy artifacts
+# OUT_DIR="/build/out/kernel_artifacts/v${FULL_KVER}"
+# mkdir -p "$OUT_DIR"
+# log "Copying kernel image (bzImage) to ${OUT_DIR}/vmlinuz-${FULL_KVER}..."
+# cp arch/x86/boot/bzImage "$OUT_DIR/vmlinuz-${FULL_KVER}"
+# cp .config "$OUT_DIR/config-${FULL_KVER}"
+# 
+# # Install modules
+# log "Installing kernel modules into ${OUT_DIR}..."
+# make modules_install INSTALL_MOD_PATH="$OUT_DIR"
 
-log "Building kernel modules..."
-make CC="ccache gcc" -j"$(nproc)" modules
-
-# 5. Copy artifacts
+# Build kernel-devel RPM using the kernel's built-in packaging
+log "Building kernel-devel RPM..."
+cd ..
+make -C linux -j"$(nproc)" binrpm-pkg
+cd linux
+# Find and copy the resulting RPMs to the artifact output directory
 OUT_DIR="/build/out/kernel_artifacts/v${FULL_KVER}"
-mkdir -p "$OUT_DIR"
-log "Copying kernel image (bzImage) to ${OUT_DIR}/vmlinuz-${FULL_KVER}..."
-cp arch/x86/boot/bzImage "$OUT_DIR/vmlinuz-${FULL_KVER}"
-cp .config "$OUT_DIR/config-${FULL_KVER}"
-
-# Install modules
-log "Installing kernel modules into ${OUT_DIR}..."
-make modules_install INSTALL_MOD_PATH="$OUT_DIR"
-make headers_install INSTALL_HDR_PATH="$OUT_DIR"
+RPM_DIR="rpmbuild/RPMS/x86_64"
+if [ -d "$RPM_DIR" ]; then
+    log "Copying kernel RPMs to $OUT_DIR..."
+    cp $RPM_DIR/kernel-*.rpm "$OUT_DIR/" || log "No kernel RPMs found in $RPM_DIR"
+else
+    log "RPM directory $RPM_DIR not found; skipping RPM copy."
+fi
 
 log "Kernel build complete. Artifacts are available in ${OUT_DIR}."
 #tail -f /dev/null

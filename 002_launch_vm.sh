@@ -338,6 +338,10 @@ fi
 
 # ========= 5. Optional: Install the Custom Kernel =========
 if [ "$INSTALL_KERNEL" == "true" ]; then
+    # Ensure output directory exists and copy spec file
+    mkdir -p "$OUT_DIR"
+    cp "$SCRIPT_DIR/dummy-kernel-headers.spec" "$OUT_DIR/" || { log "Error copying spec file"; exit 1; }
+    
     log "Connecting via SSH to install the custom kernel..."
     vm_ssh --script <<'REMOTE_EOF'
 set -euo pipefail
@@ -370,11 +374,15 @@ log "Detected custom kernel version: $KVER"
 # Write KVER to a file in the shared folder
 echo "$KVER" > /host_out/out/kver.txt
 
-#ARTIFACT_DIR="/host_out/out/kernel_artifacts/v${KVER}"
-#if [ ! -f "${ARTIFACT_DIR}/vmlinuz-${KVER}" ]; then
-#    log "Error: Kernel image not found at ${ARTIFACT_DIR}/vmlinuz-${KVER}"
-#    exit 1
-#fi
+# Update the spec file version
+if [ ! -f "/host_out/out/dummy-kernel-headers.spec" ]; then
+    log "Spec file not found in /host_out/out/dummy-kernel-headers.spec"
+    exit 1
+fi
+
+log "Updating kernel headers spec file version..."
+sed -i "s/^Version:.*/Version:        $KVER/" /host_out/out/dummy-kernel-headers.spec || { log "Failed to update spec file version"; exit 1; }
+sed -i "s/dummy-kernel-headers-[0-9.]*-/dummy-kernel-headers-$KVER-/" /host_out/out/dummy-kernel-headers.spec || { log "Failed to update spec file package name"; exit 1; }
 
 log "Retrieving UUID of the root filesystem..."
 ROOT_DEVICE=$(findmnt -n -o SOURCE --target / | sed 's/\[.*\]//')
@@ -392,9 +400,134 @@ log "Copying new kernel image to /boot/vmlinuz-${KVER}..."
 sudo cp "${ARTIFACT_DIR}/vmlinuz-${KVER}" "/boot/vmlinuz-${KVER}" || { log "Failed to copy kernel image"; exit 1; }
 sudo cp "${ARTIFACT_DIR}/config-${KVER}" "/boot/config-${KVER}" || { log "Failed to copy config"; exit 1; }
 
-log "Installing kernel modules..."
-sudo mkdir -p /lib/modules/$KVER
-sudo cp -r "${ARTIFACT_DIR}/lib/modules/$KVER/"* "/lib/modules/$KVER/" || { log "Failed to copy kernel modules"; exit 1; }
+# log "Installing kernel modules..."
+# sudo mkdir -p /lib/modules/$KVER
+# sudo cp -r "${ARTIFACT_DIR}/lib/modules/$KVER/"* "/lib/modules/$KVER/" || { log "Failed to copy kernel modules"; exit 1; }
+
+log "Installing kernel-devel RPM..."
+
+# First, find the exact RPM path
+KERNEL_DEVEL_RPM=$(find "${ARTIFACT_DIR}" -name "kernel-devel-*.rpm" 2>/dev/null | head -n 1)
+
+if [ -n "$KERNEL_DEVEL_RPM" ] && [ -f "$KERNEL_DEVEL_RPM" ]; then
+    log "Found kernel-devel RPM: $KERNEL_DEVEL_RPM"
+    # Check if readable
+    if [ -r "$KERNEL_DEVEL_RPM" ]; then
+        sudo dnf install -y "$KERNEL_DEVEL_RPM"
+    else
+        log "Error: Found kernel-devel RPM but cannot read it. Check permissions."
+        ls -l "$KERNEL_DEVEL_RPM"
+        exit 1
+    fi
+else
+    log "Error: No kernel-devel RPM found in ${ARTIFACT_DIR}"
+    # Debug information
+    log "Contents of ${ARTIFACT_DIR}:"
+    ls -la "${ARTIFACT_DIR}"
+    exit 1
+fi
+
+# Find all kernel-related RPMs
+KERNEL_RPMS=(
+    "kernel-[0-9]*.rpm"        # Main kernel package
+    "kernel-devel-*.rpm"       # Development headers
+    "kernel-headers-*.rpm"     # User-space headers
+)
+
+for rpm_pattern in "${KERNEL_RPMS[@]}"; do
+    RPM_PATH=$(find "${ARTIFACT_DIR}" -name "$rpm_pattern" 2>/dev/null | head -n 1)
+
+    if [ -n "$RPM_PATH" ] && [ -f "$RPM_PATH" ]; then
+        log "Found RPM: $RPM_PATH"
+        if [ -r "$RPM_PATH" ]; then
+            log "Installing $RPM_PATH..."
+            sudo dnf install -y "$RPM_PATH"
+        else
+            log "Warning: Found $RPM_PATH but cannot read it. Check permissions."
+            ls -l "$RPM_PATH"
+        fi
+    else
+        log "Warning: No RPM found matching pattern $rpm_pattern in ${ARTIFACT_DIR}"
+    fi
+done
+
+# Verify kernel installation
+log "Verifying kernel installation..."
+if [ ! -f "/boot/vmlinuz-${KVER}" ]; then
+    log "Error: Kernel image not found in /boot"
+    ls -l /boot
+    exit 1
+fi
+
+# Verify module installation
+if [ ! -d "/lib/modules/${KVER}" ]; then
+    log "Error: Kernel modules not found"
+    ls -l /lib/modules
+    exit 1
+fi
+
+# Verify kernel headers
+if [ ! -d "/usr/src/kernels/${KVER}" ]; then
+    log "Error: Kernel headers not found"
+    ls -l /usr/src/kernels
+    exit 1
+fi
+
+log "Kernel, modules, and headers installed successfully"
+
+# Test kernel header usability
+log "Testing kernel header usability (module build test)..."
+
+KERNEL_HEADERS_DIR="/usr/src/kernels/$KVER"
+
+# Check for key header files
+if [ ! -f "$KERNEL_HEADERS_DIR/include/linux/kernel.h" ]; then
+    log "Missing: $KERNEL_HEADERS_DIR/include/linux/kernel.h"
+    exit 1
+fi
+if [ ! -f "$KERNEL_HEADERS_DIR/arch/x86/include/asm/processor.h" ]; then
+    log "Missing: $KERNEL_HEADERS_DIR/arch/x86/include/asm/processor.h"
+    exit 1
+fi
+if [ ! -f "$KERNEL_HEADERS_DIR/include/generated/autoconf.h" ]; then
+    log "Missing: $KERNEL_HEADERS_DIR/include/generated/autoconf.h"
+    exit 1
+fi
+
+# Check for build symlink
+if [ ! -L "/lib/modules/$KVER/build" ]; then
+    log "Missing symlink: /lib/modules/$KVER/build"
+    exit 1
+fi
+if [ "$(readlink -f /lib/modules/$KVER/build)" != "$KERNEL_HEADERS_DIR" ]; then
+    log "Symlink /lib/modules/$KVER/build does not point to $KERNEL_HEADERS_DIR"
+    exit 1
+fi
+
+# Create minimal test module source
+cat > /tmp/testmod.c <<EOF
+#include <linux/module.h>
+#include <linux/kernel.h>
+int init_module(void) { return 0; }
+void cleanup_module(void) { }
+MODULE_LICENSE("GPL");
+EOF
+
+# Create minimal Makefile
+cat > /tmp/Makefile <<EOF
+obj-m += testmod.o
+EOF
+
+# Build the module using the kernel build system
+make -C /lib/modules/$KVER/build M=/tmp modules > /tmp/testmod_build.log 2>&1
+
+if [ -f /tmp/testmod.ko ]; then
+    log "Kernel headers are present and usable for out-of-tree module builds. Kernel installation verified successfully."
+else
+    log "Failed to build minimal kernel module. See /tmp/testmod_build.log for details."
+    tail -20 /tmp/testmod_build.log
+    exit 1
+fi
 
 log "Installing kernel headers..."
 sudo mkdir -p /usr/src/kernels/$KVER/usr
@@ -418,8 +551,8 @@ EOF
 sudo chmod +x /lib/dracut/hooks/initqueue/finished/"$HOOK_NAME"
 echo "force_drivers+=\" virtio_blk virtio_pci btrfs \"" | sudo tee /etc/dracut.conf.d/99-custom.conf
 echo "add_drivers+=\" btrfs \"" | sudo tee -a /etc/dracut.conf.d/99-custom.conf
-sudo dracut -f --add-drivers "virtio_blk virtio_pci btrfs" --force --kver 6.14.0 \
-    --fstab --include /lib/dracut/hooks /lib/dracut/hooks /boot/initramfs-6.14.0.img
+sudo dracut -f --add-drivers "virtio_blk virtio_pci btrfs" --force --kver ${KVER} \
+    --fstab --include /lib/dracut/hooks /lib/dracut/hooks /boot/initramfs-${KVER}.img
 
 log "Adding new kernel entry to bootloader with boot parameters using UUID..."
 sudo grubby --add-kernel="/boot/vmlinuz-${KVER}" --initrd="/boot/initramfs-${KVER}.img" --title="Custom Kernel $KVER" --args="root=/dev/vda4 rootfstype=btrfs rootflags=subvol=root console=ttyS0" --make-default || {

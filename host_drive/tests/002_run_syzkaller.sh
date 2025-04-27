@@ -56,9 +56,8 @@ if [ ! -f "$SSH_KEY" ]; then
 fi
 PUBLIC_KEY=$(cat "$SSH_KEY.pub")
 
-
 HTTP_PORT=$(find_free_port)
-#HTTP_PORT=8080
+
 # Generate Syzkaller configuration
 echo "Generating Syzkaller configuration..."
 cat > "$SYZKALLER_CONFIG" <<EOF
