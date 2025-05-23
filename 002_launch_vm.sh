@@ -372,7 +372,7 @@ KVER=$(basename "$ARTIFACT_DIR" | sed 's/^v//')
 log "Detected custom kernel version: $KVER"
 
 # Write KVER to a file in the shared folder
-echo "$KVER" > /host_out/out/kver.txt
+echo "$KVER" > /host_out/out/kernel_artifacts/kver.txt
 
 # Update the spec file version
 if [ ! -f "/host_out/out/dummy-kernel-headers.spec" ]; then
@@ -519,6 +519,7 @@ obj-m += testmod.o
 EOF
 
 # Build the module using the kernel build system
+sudo dnf install -y make gcc
 make -C /lib/modules/$KVER/build M=/tmp modules > /tmp/testmod_build.log 2>&1
 
 if [ -f /tmp/testmod.ko ]; then
@@ -567,7 +568,7 @@ exit  # Exit SSH session immediately after reboot command
 REMOTE_EOF
 
     # Read KVER from the file on the host
-    KVER=$(cat "$OUT_DIR/kver.txt")
+    KVER=$(cat "$OUT_DIR/kernel_artifacts/kver.txt")
     log "Kernel version detected: $KVER"
 
     log "Kernel installation commands were sent to the VM."
@@ -618,18 +619,18 @@ EOF
             mv "$TEST_CONFIG.tmp" "$TEST_CONFIG"
         fi
 
-	log "Running 003_run_tests.sh on the host..."
-        bash "$SCRIPT_DIR/003_run_tests.sh" || {
-            log "Error: Test execution failed on the host."
-            exit 1
-        }
-        fi
-    else
-        log "Connecting via SSH to mount host_drive..."
-        vm_ssh --script <<'EOF'
-        sudo mkdir -p /home/user/host_drive
-        sudo mount -t 9p -o trans=virtio host_drive /home/user/host_drive
-        exit  # Ensure SSH session exits
+    log "Running 003_run_tests.sh on the host..."
+    bash "$SCRIPT_DIR/003_run_tests.sh" || {
+        log "Error: Test execution failed on the host."
+        exit 1
+    }
+    fi
+else
+    log "Connecting via SSH to mount host_drive..."
+    vm_ssh --script <<'EOF'
+    sudo mkdir -p /home/user/host_drive
+    sudo mount -t 9p -o trans=virtio host_drive /home/user/host_drive
+    exit  # Ensure SSH session exits
 EOF
     log "VM is running. Connect via SSH with: ssh -p 2222 ${SSH_USER}@localhost"
 

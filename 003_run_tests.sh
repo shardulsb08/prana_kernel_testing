@@ -119,8 +119,8 @@ case "$test_name" in
         KVER="$(<"$KERNEL_OUT/kver.txt")"
         ARTIFACT_DIR="$KERNEL_OUT"
 
-        if [ ! -f "${ARTIFACT_DIR}/${KERNEL_BUILD_TARGET}" ]; then
-            log "Error: Kernel image not found at ${ARTIFACT_DIR}/${KERNEL_BUILD_TARGET}"
+        if [ ! -f "${ARTIFACT_DIR}/${KVER}/${KERNEL_BUILD_TARGET}" ]; then
+            log "Error: Kernel image not found at ${ARTIFACT_DIR}/${KVER}/${KERNEL_BUILD_TARGET}"
             exit 1
         fi
 
@@ -135,7 +135,7 @@ case "$test_name" in
             set -euo pipefail
             sudo mkdir -p /host_out
             sudo mount -t 9p -o trans=virtio host_out /host_out
-            KVER=$(cat /host_out/kver.txt)
+            KVER=$(cat /host_out/out/kernel_artifacts/kver.txt)
             ln -sfn /host_out/linux /home/user/host_drive/tests/syzkaller/kernel_build/v${KVER}/v${KVER}/
             exit # Ensure SSH session exits
 EOF

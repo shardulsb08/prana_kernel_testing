@@ -304,6 +304,7 @@ make -C linux -j"$(nproc)" binrpm-pkg
 cd linux
 # Find and copy the resulting RPMs to the artifact output directory
 OUT_DIR="/build/out/kernel_artifacts/v${FULL_KVER}"
+mkdir -p ${OUT_DIR}
 RPM_DIR="rpmbuild/RPMS/x86_64"
 if [ -d "$RPM_DIR" ]; then
     log "Copying kernel RPMs to $OUT_DIR..."
