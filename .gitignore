@@ -101,7 +101,7 @@ System.map*
 # Temporary kernel build files
 *.o.d
 *.ko.cmd
-.config
+#.config
 .config.old
 include/config/
 include/generated/
