@@ -362,6 +362,7 @@ fi
 log "Detecting kernel version from artifact directory..."
 # Find the latest artifact directory (e.g., /host_out/out/kernel_artifacts/v6.14.0)
 ARTIFACT_DIR=$(ls -d /host_out/out/kernel_artifacts/v* 2>/dev/null | sort -V | tail -n 1)
+log "ARTIFACT_DIR : ${ARTIFACT_DIR}"
 if [ -z "$ARTIFACT_DIR" ]; then
     log "Error: No artifact directory found in /host_out/out/kernel_artifacts/"
     exit 1
@@ -396,9 +397,9 @@ log "Root filesystem UUID: $ROOT_UUID"
 log "Remounting /boot as read-write..."
 sudo mount -o remount,rw /boot || { log "Failed to remount /boot as read-write"; exit 1; }
 
-log "Copying new kernel image to /boot/vmlinuz-${KVER}..."
-sudo cp "${ARTIFACT_DIR}/vmlinuz-${KVER}" "/boot/vmlinuz-${KVER}" || { log "Failed to copy kernel image"; exit 1; }
-sudo cp "${ARTIFACT_DIR}/config-${KVER}" "/boot/config-${KVER}" || { log "Failed to copy config"; exit 1; }
+#log "Copying new kernel image to /boot/vmlinuz-${KVER}..."
+#sudo cp "${ARTIFACT_DIR}/vmlinuz-${KVER}" "/boot/vmlinuz-${KVER}" || { log "Failed to copy kernel image"; exit 1; }
+#sudo cp "${ARTIFACT_DIR}/config-${KVER}" "/boot/config-${KVER}" || { log "Failed to copy config"; exit 1; }
 
 # log "Installing kernel modules..."
 # sudo mkdir -p /lib/modules/$KVER
@@ -407,7 +408,7 @@ sudo cp "${ARTIFACT_DIR}/config-${KVER}" "/boot/config-${KVER}" || { log "Failed
 log "Installing kernel-devel RPM..."
 
 # First, find the exact RPM path
-KERNEL_DEVEL_RPM=$(find "${ARTIFACT_DIR}" -name "kernel-devel-*.rpm" 2>/dev/null | head -n 1)
+KERNEL_DEVEL_RPM=$(find "${ARTIFACT_DIR}" -name "kernel-devel-*.rpm" 2>/dev/null | sort -V | tail -n 1)
 
 if [ -n "$KERNEL_DEVEL_RPM" ] && [ -f "$KERNEL_DEVEL_RPM" ]; then
     log "Found kernel-devel RPM: $KERNEL_DEVEL_RPM"
@@ -435,7 +436,7 @@ KERNEL_RPMS=(
 )
 
 for rpm_pattern in "${KERNEL_RPMS[@]}"; do
-    RPM_PATH=$(find "${ARTIFACT_DIR}" -name "$rpm_pattern" 2>/dev/null | head -n 1)
+    RPM_PATH=$(find "${ARTIFACT_DIR}" -name "$rpm_pattern" 2>/dev/null | sort -V | tail -n 1)
 
     if [ -n "$RPM_PATH" ] && [ -f "$RPM_PATH" ]; then
         log "Found RPM: $RPM_PATH"
