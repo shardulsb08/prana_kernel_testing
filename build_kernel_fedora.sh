@@ -276,8 +276,8 @@ scripts/config --file .config --enable CONFIG_IKCONFIG
 scripts/config --file .config --enable CONFIG_IKCONFIG_PROC
 
 # Update configuration again
-log "Updating kernel configuration with 'make olddefconfig'..."
-make olddefconfig
+#log "Updating kernel configuration with 'make olddefconfig'..."
+#make olddefconfig
 
 # # 4. Build the kernel image and modules with ccache
 # log "Building kernel bzImage..."
@@ -300,7 +300,7 @@ make olddefconfig
 # Build kernel-devel RPM using the kernel's built-in packaging
 log "Building kernel-devel RPM..."
 cd ..
-make -C linux -j"$(nproc)" binrpm-pkg
+yes "" | make -C linux -j"$(nproc)" binrpm-pkg
 cd linux
 # Find and copy the resulting RPMs to the artifact output directory
 OUT_DIR="/build/out/kernel_artifacts/v${FULL_KVER}"
