@@ -340,7 +340,7 @@ fi
 if [ "$INSTALL_KERNEL" == "true" ]; then
     # Ensure output directory exists and copy spec file
     mkdir -p "$OUT_DIR"
-    cp "$SCRIPT_DIR/dummy-kernel-headers.spec" "$OUT_DIR/" || { log "Error copying spec file"; exit 1; }
+#    cp "$SCRIPT_DIR/dummy-kernel-headers.spec" "$OUT_DIR/" || { log "Error copying spec file"; exit 1; }
     
     log "Connecting via SSH to install the custom kernel..."
     vm_ssh --script <<'REMOTE_EOF'
@@ -376,14 +376,14 @@ log "Detected custom kernel version: $KVER"
 echo "$KVER" > /host_out/out/kernel_artifacts/kver.txt
 
 # Update the spec file version
-if [ ! -f "/host_out/out/dummy-kernel-headers.spec" ]; then
-    log "Spec file not found in /host_out/out/dummy-kernel-headers.spec"
-    exit 1
-fi
+#if [ ! -f "/host_out/out/dummy-kernel-headers.spec" ]; then
+#    log "Spec file not found in /host_out/out/dummy-kernel-headers.spec"
+#    exit 1
+#fi
 
-log "Updating kernel headers spec file version..."
-sed -i "s/^Version:.*/Version:        $KVER/" /host_out/out/dummy-kernel-headers.spec || { log "Failed to update spec file version"; exit 1; }
-sed -i "s/dummy-kernel-headers-[0-9.]*-/dummy-kernel-headers-$KVER-/" /host_out/out/dummy-kernel-headers.spec || { log "Failed to update spec file package name"; exit 1; }
+#log "Updating kernel headers spec file version..."
+#sed -i "s/^Version:.*/Version:        $KVER/" /host_out/out/dummy-kernel-headers.spec || { log "Failed to update spec file version"; exit 1; }
+#sed -i "s/dummy-kernel-headers-[0-9.]*-/dummy-kernel-headers-$KVER-/" /host_out/out/dummy-kernel-headers.spec || { log "Failed to update spec file package name"; exit 1; }
 
 log "Retrieving UUID of the root filesystem..."
 ROOT_DEVICE=$(findmnt -n -o SOURCE --target / | sed 's/\[.*\]//')
@@ -414,7 +414,10 @@ if [ -n "$KERNEL_DEVEL_RPM" ] && [ -f "$KERNEL_DEVEL_RPM" ]; then
     log "Found kernel-devel RPM: $KERNEL_DEVEL_RPM"
     # Check if readable
     if [ -r "$KERNEL_DEVEL_RPM" ]; then
-        sudo dnf install -y "$KERNEL_DEVEL_RPM"
+#        dnf5 config dump | grep -i exclude
+#        sudo rpm -Uvh "$KERNEL_DEVEL_RPM"
+        log "kernel-devel RPM: $KERNEL_DEVEL_RPM is accessible"
+#        sudo dnf install -y --disableexcludes=all "$KERNEL_DEVEL_RPM"
     else
         log "Error: Found kernel-devel RPM but cannot read it. Check permissions."
         ls -l "$KERNEL_DEVEL_RPM"
@@ -442,7 +445,8 @@ for rpm_pattern in "${KERNEL_RPMS[@]}"; do
         log "Found RPM: $RPM_PATH"
         if [ -r "$RPM_PATH" ]; then
             log "Installing $RPM_PATH..."
-            sudo dnf install -y "$RPM_PATH"
+            sudo rpm -Uvh "$RPM_PATH"
+#            sudo dnf install -y --disableexcludes=all "$RPM_PATH"
         else
             log "Warning: Found $RPM_PATH but cannot read it. Check permissions."
             ls -l "$RPM_PATH"
