@@ -117,7 +117,7 @@ log_build_step "VERSION" "Fetching latest stable kernel version"
 attempt=0
 max_attempts=3
 until [ $attempt -ge $max_attempts ]; do
-    LATEST_STABLE=$(log_command curl -s https://www.kernel.org/finger_banner | grep "latest stable version" | awk '{print $NF}')
+    LATEST_STABLE=$(curl -s https://www.kernel.org/finger_banner | grep "latest stable version" | awk '{print $NF}')
     if [ -n "$LATEST_STABLE" ]; then
         break
     else
@@ -275,7 +275,7 @@ log_command scripts/config --file .config --enable CONFIG_IKCONFIG_PROC
 # Build kernel-devel RPM using the kernel's built-in packaging
 log_build_step "BUILD" "Building kernel-devel RPM"
 cd ..
-log_command yes "" | make -C linux -j"$(nproc)" binrpm-pkg
+yes "" | make -C linux -j"$(nproc)" binrpm-pkg
 cd linux
 
 # Find and copy the resulting RPMs to the artifact output directory
