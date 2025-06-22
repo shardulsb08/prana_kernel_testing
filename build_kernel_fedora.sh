@@ -118,6 +118,7 @@ attempt=0
 max_attempts=3
 until [ $attempt -ge $max_attempts ]; do
     LATEST_STABLE=$(curl -s https://www.kernel.org/finger_banner | grep "latest stable version" | awk '{print $NF}')
+    LATEST_STABLE=6.6.94
     if [ -n "$LATEST_STABLE" ]; then
         break
     else
@@ -248,6 +249,12 @@ if [ -f /build_input/test_config.txt ]; then
             log_error "/build_input/kernel_syskaller.config not found"
             exit 1
         fi
+        if [ -f /build_input/fuzz_config_untouched_only.config ]; then
+            apply_kernel_configs /build_input/fuzz_config_untouched_only.config
+        else
+            log_error "/build_input/fuzz_config_untouched_only.config not found"
+            exit 1
+        fi
     elif grep -q '^syzgen_config_raw\b' /build_input/test_config.txt; then
         if [ -f /build_input/kernel_syzgen_raw.config ]; then
             apply_kernel_configs /build_input/kernel_syzgen_raw.config
@@ -272,10 +279,15 @@ log_build_step "CONFIG" "Enabling config embedding"
 log_command scripts/config --file .config --enable CONFIG_IKCONFIG
 log_command scripts/config --file .config --enable CONFIG_IKCONFIG_PROC
 
+# Patch Makefile.package to allow building kernel-devel RPM with binrpm-pkg
+log_build_step "PATCH" "Removing --without devel from scripts/Makefile.package"
+sed -i 's/--without devel//g' scripts/Makefile.package
+
 # Build kernel-devel RPM using the kernel's built-in packaging
 log_build_step "BUILD" "Building kernel-devel RPM"
 cd ..
-yes "" | make -C linux -j"$(nproc)" binrpm-pkg
+yes "" | make -C linux -j"$(nproc)" binrpm-pkg RPMOPTS="${RPMOPTS:+$RPMOPTS }--with devel"
+log_info "Build complete"
 cd linux
 
 # Find and copy the resulting RPMs to the artifact output directory
