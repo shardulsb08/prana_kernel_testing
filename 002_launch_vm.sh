@@ -396,6 +396,8 @@ log "Root filesystem UUID: $ROOT_UUID"
 
 log "Remounting /boot as read-write..."
 sudo mount -o remount,rw /boot || { log "Failed to remount /boot as read-write"; exit 1; }
+log "Remounting /boot/efi as read-write..."
+sudo mount -o remount,rw /boot/efi || { log "Failed to remount /boot/efi as read-write"; exit 1; }
 
 #log "Copying new kernel image to /boot/vmlinuz-${KVER}..."
 #sudo cp "${ARTIFACT_DIR}/vmlinuz-${KVER}" "/boot/vmlinuz-${KVER}" || { log "Failed to copy kernel image"; exit 1; }
@@ -445,7 +447,7 @@ for rpm_pattern in "${KERNEL_RPMS[@]}"; do
         log "Found RPM: $RPM_PATH"
         if [ -r "$RPM_PATH" ]; then
             log "Installing $RPM_PATH..."
-            sudo rpm -Uvh "$RPM_PATH"
+            sudo rpm -Uvh --nopost "$RPM_PATH"
 #            sudo dnf install -y --disableexcludes=all "$RPM_PATH"
         else
             log "Warning: Found $RPM_PATH but cannot read it. Check permissions."
@@ -456,7 +458,42 @@ for rpm_pattern in "${KERNEL_RPMS[@]}"; do
     fi
 done
 
+# log "Generating initramfs for the new kernel..."
+# Update dracut configuration for the correct drivers and filesystem
+HOOK_NAME="devexists-$(echo /dev/vda4 | sed 's/\//_/g').sh"
+sudo mkdir -p /lib/dracut/hooks/initqueue/finished
+sudo tee /lib/dracut/hooks/initqueue/finished/"$HOOK_NAME" <<EOF
+#!/bin/sh
+[ -e "/dev/vda4" ]
+EOF
+sudo chmod +x /lib/dracut/hooks/initqueue/finished/"$HOOK_NAME"
+echo "force_drivers+=\" virtio_blk virtio_pci btrfs \"" | sudo tee /etc/dracut.conf.d/99-custom.conf
+echo "add_drivers+=\" btrfs \"" | sudo tee -a /etc/dracut.conf.d/99-custom.conf
+sudo dracut -f --add-drivers "virtio_blk virtio_pci btrfs" --force --kver ${KVER} \
+    --fstab --include /lib/dracut/hooks /lib/dracut/hooks /boot/initramfs-${KVER}.img
+
+log "Adding new kernel entry to bootloader with boot parameters using UUID..."
+sudo grubby --add-kernel="/boot/vmlinuz-${KVER}" --initrd="/boot/initramfs-${KVER}.img" --title="Custom Kernel $KVER" --args="root=/dev/vda4 rootfstype=btrfs rootflags=subvol=root console=ttyS0" --make-default || {
+    log "grubby failed; updating bootloader configuration manually..."
+    sudo grub2-mkconfig -o /boot/grub2/grub.cfg
+}
+
+
+# Set default kernel
+DEFAULT_KERNEL=$(sudo grubby --default-kernel 2>/dev/null || echo "unknown")
+log "Current default kernel: $DEFAULT_KERNEL"
+if echo "$DEFAULT_KERNEL" | grep -q "vmlinuz-${KVER}"; then
+    log "Custom kernel is now set as the default."
+else
+    log "Custom kernel not set as default. Setting manually..."
+    sudo grubby --set-default="/boot/vmlinuz-${KVER}"
+fi
+
+# This prevents kernel packages from updating, so your custom kernel remains the only one in use.
+sudo sed -i '/\[main\]/a exclude=kernel*' /etc/dnf/dnf.conf
+
 # Verify kernel installation
+# Commenting for now, failing for some reason.
 log "Verifying kernel installation..."
 if [ ! -f "/boot/vmlinuz-${KVER}" ]; then
     log "Error: Kernel image not found in /boot"
@@ -534,38 +571,6 @@ else
     tail -20 /tmp/testmod_build.log
     exit 1
 fi
-
-log "Generating initramfs for the new kernel..."
-# Update dracut configuration for the correct drivers and filesystem
-HOOK_NAME="devexists-$(echo /dev/vda4 | sed 's/\//_/g').sh"
-sudo mkdir -p /lib/dracut/hooks/initqueue/finished
-sudo tee /lib/dracut/hooks/initqueue/finished/"$HOOK_NAME" <<EOF
-#!/bin/sh
-[ -e "/dev/vda4" ]
-EOF
-sudo chmod +x /lib/dracut/hooks/initqueue/finished/"$HOOK_NAME"
-echo "force_drivers+=\" virtio_blk virtio_pci btrfs \"" | sudo tee /etc/dracut.conf.d/99-custom.conf
-echo "add_drivers+=\" btrfs \"" | sudo tee -a /etc/dracut.conf.d/99-custom.conf
-sudo dracut -f --add-drivers "virtio_blk virtio_pci btrfs" --force --kver ${KVER} \
-    --fstab --include /lib/dracut/hooks /lib/dracut/hooks /boot/initramfs-${KVER}.img
-
-log "Adding new kernel entry to bootloader with boot parameters using UUID..."
-sudo grubby --add-kernel="/boot/vmlinuz-${KVER}" --initrd="/boot/initramfs-${KVER}.img" --title="Custom Kernel $KVER" --args="root=/dev/vda4 rootfstype=btrfs rootflags=subvol=root console=ttyS0" --make-default || {
-    log "grubby failed; updating bootloader configuration manually..."
-    sudo grub2-mkconfig -o /boot/grub2/grub.cfg
-}
-# Set default kernel
-DEFAULT_KERNEL=$(sudo grubby --default-kernel 2>/dev/null || echo "unknown")
-log "Current default kernel: $DEFAULT_KERNEL"
-if echo "$DEFAULT_KERNEL" | grep -q "vmlinuz-${KVER}"; then
-    log "Custom kernel is now set as the default."
-else
-    log "Custom kernel not set as default. Setting manually..."
-    sudo grubby --set-default="/boot/vmlinuz-${KVER}"
-fi
-
-# This prevents kernel packages from updating, so your custom kernel remains the only one in use.
-sudo sed -i '/\[main\]/a exclude=kernel*' /etc/dnf/dnf.conf
 
 log "Kernel installation complete. Rebooting to test the custom kernel..."
 sudo reboot & exit
