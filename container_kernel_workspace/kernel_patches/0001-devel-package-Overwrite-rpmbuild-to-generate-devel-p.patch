@@ -1,0 +1,25 @@
+From 656005d3e4c245a7815a8a88b5d916f8e24037a4 Mon Sep 17 00:00:00 2001
+From: Shardul Bankar <shardulsb08@gmail.com>
+Date: Sun, 22 Jun 2025 20:37:14 +0530
+Subject: [PATCH] devel-package: Overwrite rpmbuild to generate devel package
+
+---
+ scripts/Makefile.package | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/scripts/Makefile.package b/scripts/Makefile.package
+index a16d60a4b3fd..e6803c5ffdd9 100644
+--- a/scripts/Makefile.package
++++ b/scripts/Makefile.package
+@@ -95,7 +95,7 @@ rpm-pkg srcrpm-pkg binrpm-pkg: kernel.spec
+ 		--target $(UTS_MACHINE)-linux --build-in-place --noprep --define='_smp_mflags %{nil}' \
+ 		$$(rpm -q rpm >/dev/null 2>&1 || echo --nodeps)) \
+ 	$(if $(filter b, $(build-type)), \
+-		--without devel) \
++		) \
+ 	$(RPMOPTS))
+ 
+ # deb-pkg srcdeb-pkg bindeb-pkg
+-- 
+2.34.1
+

@@ -281,7 +281,16 @@ log_command scripts/config --file .config --enable CONFIG_IKCONFIG_PROC
 
 # Patch Makefile.package to allow building kernel-devel RPM with binrpm-pkg
 log_build_step "PATCH" "Removing --without devel from scripts/Makefile.package"
-sed -i 's/--without devel//g' scripts/Makefile.package
+#sed -i 's/--without devel//g' scripts/Makefile.package
+git config --global user.email "shardulsb08@gmail.com"
+git config --global user.name "Shardul Bankar"
+
+git am ../kernel_patches/0001-devel-package-Overwrite-rpmbuild-to-generate-devel-p.patch
+# git am --abort
+# export EXTRAVERSION=""
+# echo '' > localversion-reset
+# git checkout  v6.6.94-fuzz
+export LOCALVERSION=""
 
 # Build kernel-devel RPM using the kernel's built-in packaging
 log_build_step "BUILD" "Building kernel-devel RPM"
