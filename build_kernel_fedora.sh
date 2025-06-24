@@ -46,6 +46,35 @@ apply_kernel_configs() {
     done < "$config_file"
 }
 
+# Function to update a specific kernel configuration value
+update_config() {
+    local input_config="$1"
+    local new_value="$2"
+    # Note: Using ".config" as the file path is correct because this function
+    # is called when the current directory is 'linux'.
+    local config_file=".config"
+
+    log_build_step "CONFIG_UPDATE" "Updating $input_config to '$new_value' in $config_file"
+
+    # Use grep with Extended Regex to check if the config exists in any form.
+    if grep -q -E "^${input_config}=|# ${input_config} is not set" "$config_file"; then
+        # Use two separate, simpler sed commands for maximum compatibility.
+        # This avoids complex regex and is safer across different sed versions.
+
+        # 1. Replace the commented-out version, if it exists.
+        sed -i "s|^# ${input_config} is not set|${input_config}=${new_value}|" "$config_file"
+
+        # 2. Replace the version that already has a value. This will also match
+        #    the line that was just modified by the command above, which is safe.
+        sed -i "s|^${input_config}=.*|${input_config}=${new_value}|" "$config_file"
+
+        log_info "Successfully updated $input_config to '$new_value'."
+    else
+        # If the config is not found in the .config file at all
+        log_warning "$input_config not found in existing .config, if you want it, add it to an appropriate config file"
+    fi
+}
+
 # Create output directory for artifacts
 OUT_DIR="/build/out/kernel_artifacts"
 log_build_step "SETUP" "Creating output directory: $OUT_DIR"
@@ -273,6 +302,19 @@ if [ -f /build_input/test_config.txt ]; then
 else
     log_warning "/build_input/test_config.txt not found"
 fi
+
+# ======================================================================================
+# EXAMPLE USAGE of update_config function
+# You can call the new function here, after all base configs are set.
+#
+# update_config CONFIG_LOCK_TORTURE_TEST m
+# update_config CONFIG_LOCALVERSION '"-custombuild"'
+# update_config CONFIG_DEBUG_INFO y
+# update_config CONFIG_RANDOM_STRUCT_PLUGIN n
+# ======================================================================================
+update_config CONFIG_LOCK_TORTURE_TEST m
+update_config CONFIG_RCU_TORTURE_TEST m
+update_config CONFIG_LOCALVERSION '"-custombuild"'
 
 # Embed the config in the kernel image
 log_build_step "CONFIG" "Enabling config embedding"

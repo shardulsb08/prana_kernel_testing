@@ -493,7 +493,6 @@ fi
 sudo sed -i '/\[main\]/a exclude=kernel*' /etc/dnf/dnf.conf
 
 # Verify kernel installation
-# Commenting for now, failing for some reason.
 log "Verifying kernel installation..."
 if [ ! -f "/boot/vmlinuz-${KVER}" ]; then
     log "Error: Kernel image not found in /boot"
