@@ -260,6 +260,11 @@ if [ $attempt -eq $max_attempts ]; then
     exit 1
 fi
 
+# Embed the config in the kernel image
+log_build_step "CONFIG" "Enabling config embedding"
+log_command scripts/config --file .config --enable CONFIG_IKCONFIG
+log_command scripts/config --file .config --enable CONFIG_IKCONFIG_PROC
+
 # 3. Update configuration
 log_build_step "CONFIG" "Updating kernel configuration"
 log_command make olddefconfig
@@ -278,12 +283,12 @@ if [ -f /build_input/test_config.txt ]; then
             log_error "/build_input/kernel_syskaller.config not found"
             exit 1
         fi
-        if [ -f /build_input/fuzz_config_untouched_only.config ]; then
-            apply_kernel_configs /build_input/fuzz_config_untouched_only.config
-        else
-            log_error "/build_input/fuzz_config_untouched_only.config not found"
-            exit 1
-        fi
+#        if [ -f /build_input/fuzz_config_untouched_only.config ]; then
+#            apply_kernel_configs /build_input/fuzz_config_untouched_only.config
+#        else
+#            log_error "/build_input/fuzz_config_untouched_only.config not found"
+#            exit 1
+#        fi
     elif grep -q '^syzgen_config_raw\b' /build_input/test_config.txt; then
         if [ -f /build_input/kernel_syzgen_raw.config ]; then
             apply_kernel_configs /build_input/kernel_syzgen_raw.config
@@ -312,14 +317,40 @@ fi
 # update_config CONFIG_DEBUG_INFO y
 # update_config CONFIG_RANDOM_STRUCT_PLUGIN n
 # ======================================================================================
-update_config CONFIG_LOCK_TORTURE_TEST m
-update_config CONFIG_RCU_TORTURE_TEST m
+# update_config CONFIG_LOCK_TORTURE_TEST n
+# update_config CONFIG_RCU_TORTURE_TEST n
+# Embed the config in the kernel image
+log_build_step "CONFIG" "Enabling config embedding"
+log_command scripts/config --file .config --enable CONFIG_IKCONFIG
+log_command scripts/config --file .config --enable CONFIG_IKCONFIG_PROC
+
+# update_config CONFIG_RCU_SCALE_TEST n
+# update_config CONFIG_RCU_REF_SCALE_TEST n
+# update_config CONFIG_TEST_XARRAY n
+update_config CONFIG_PROVE_RCU n
+# update_config CONFIG_WW_MUTEX_SELFTEST n
+# update_config CONFIG_TORTURE_TEST n
 update_config CONFIG_LOCALVERSION '"-custombuild"'
 
 # Embed the config in the kernel image
 log_build_step "CONFIG" "Enabling config embedding"
 log_command scripts/config --file .config --enable CONFIG_IKCONFIG
 log_command scripts/config --file .config --enable CONFIG_IKCONFIG_PROC
+
+# Enable REF_TRACKER by enabling network device refcount tracking
+# This automatically selects CONFIG_REF_TRACKER without creating test modules
+log_build_step "CONFIG" "Enabling REF_TRACKER infrastructure via network debugging"
+log_command scripts/config --file .config --enable CONFIG_NET_DEV_REFCNT_TRACKER
+log_info "CONFIG_NET_DEV_REFCNT_TRACKER enabled (which automatically enables CONFIG_REF_TRACKER)"
+log_command scripts/config --file .config --enable CONFIG_NET_NS_REFCNT_TRACKER
+
+# Verify the configuration
+log_build_step "CONFIG" "Verifying REF_TRACKER configuration"
+if grep -q "CONFIG_REF_TRACKER=y" .config; then
+    log_info "CONFIG_REF_TRACKER is properly enabled"
+else
+    log_warning "CONFIG_REF_TRACKER not found in .config after enabling NET_DEV_REFCNT_TRACKER"
+fi
 
 # Patch Makefile.package to allow building kernel-devel RPM with binrpm-pkg
 log_build_step "PATCH" "Removing --without devel from scripts/Makefile.package"
