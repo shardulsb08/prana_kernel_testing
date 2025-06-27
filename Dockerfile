@@ -11,7 +11,9 @@ RUN dnf -y update && \
         make \
         flex \
         bison \
+        openssl \
         openssl-devel \
+        openssl-devel-engine \
         elfutils-libelf-devel \
 	elfutils-devel \
         wget \
