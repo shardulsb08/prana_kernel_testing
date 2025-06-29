@@ -195,15 +195,15 @@ else
     log_command git checkout rawhide
     attempt=0
     max_attempts=3
-    until [ $attempt -ge $max_attempts ]; do
-        if log_command git pull; then
-            break
-        else
-            attempt=$((attempt+1))
-            log_warning "git pull attempt $attempt failed. Retrying in 5 seconds..."
-            sleep 5
-        fi
-    done
+#    until [ $attempt -ge $max_attempts ]; do
+#        if log_command git pull; then
+#            break
+#        else
+#            attempt=$((attempt+1))
+#            log_warning "git pull attempt $attempt failed. Retrying in 5 seconds..."
+#            sleep 5
+#        fi
+#    done
     if [ $attempt -eq $max_attempts ]; then
         log_error "Failed to pull updates for fedora_kernel after $max_attempts attempts."
         exit 1
@@ -212,6 +212,7 @@ else
 fi
 
 # Copy the generated configuration for x86_64 from fedora_kernel into the Linux source
+rm linux/.config
 if [ ! -f "linux/.config" ]; then
     log_build_step "CONFIG" "Generating Fedora Rawhide configuration"
     cd fedora_kernel
@@ -361,9 +362,8 @@ fi
 git config --global user.email "shardulsb08@gmail.com"
 git config --global user.name "Shardul Bankar"
 
-#git am ../kernel_patches/0001-devel-package-Overwrite-rpmbuild-to-generate-devel-p.patch
+# git am ../kernel_patches/0001-devel-package-Overwrite-rpmbuild-to-generate-devel-p.patch
 # git am ../kernel_patches/0001-kernel_build-Use-gnu-89-for-6.1.74-kernel.patch
-git am ../kernel_patches/cflags-fix.patch
 # git am --abort
 # export EXTRAVERSION=""
 # echo '' > localversion-reset
@@ -385,12 +385,25 @@ fi
 log_build_step "CONFIG" "Running 'make olddefconfig' to create a stable .config file"
 make olddefconfig
 
-# STEP 1: Create a new patch file in the parent directory.
+log_build_step "PATCH" "Applying all necessary build compatibility patches"
+
+# STEP 1: Fix the main build's C-standard in kernel.spec
+log_info "Setting main build to use C11 standard in kernel.spec"
+sed -i 's/KCFLAGS="%{?kcflags} -std=gnu89"/KCFLAGS="%{?kcflags} -std=gnu11"/' kernel.spec
+
+# STEP 2: Fix the 'make: Makefile: No such file or directory' error in kernel.spec
+# Your grep command showed this was a problem. We tell 'make' where to find the source.
+# The KVERREL variable is defined inside the spec file, so we use it here.
+log_info "Fixing 'make' commands inside kernel.spec's install phase"
+sed -i 's|make -f \./Makefile -s image_name|make -C %{_builddir}/linux-%{KVERREL} -s image_name|g' kernel.spec
+
+
+# STEP 3: Create a new patch file in the parent directory.
 # This patch file contains all the necessary changes for the Makefiles and the spec file's
 # InitBuildVars function. It is a standard 'diff' format.
 # We will call it 'cflags-fix.patch'.
-cat << 'EOF' > ../cflags-fix.patch
-From ac211456c23f97e686ede24997976db4c91cfd17 Mon Sep 17 00:00:00 2001
+cat << 'EOF' > ../kernel_patches/cflags-fix.patch
+From 3738999d59846a0565180da39ce5d3a79d5588f2 Mon Sep 17 00:00:00 2001
 From: Shardul Bankar <shardulsb08@gmail.com>
 Date: Sat, 28 Jun 2025 00:39:15 +0530
 Subject: [PATCH] kernel_build: cflags-fix.patch for setting gcc version for
@@ -398,10 +411,11 @@ Subject: [PATCH] kernel_build: cflags-fix.patch for setting gcc version for
 
 ---
  arch/x86/Makefile                     | 2 +-
+ arch/x86/boot/compressed/Makefile     | 1 +
  arch/x86/realmode/Makefile            | 2 ++
  arch/x86/realmode/rm/Makefile         | 3 ++-
  drivers/firmware/efi/libstub/Makefile | 3 ++-
- 4 files changed, 7 insertions(+), 3 deletions(-)
+ 5 files changed, 8 insertions(+), 3 deletions(-)
 
 diff --git a/arch/x86/Makefile b/arch/x86/Makefile
 index 3419ffa2a350..65ad70777362 100644
@@ -412,10 +426,22 @@ index 3419ffa2a350..65ad70777362 100644
  REALMODE_CFLAGS	:= -m16 -g -Os -DDISABLE_BRANCH_PROFILING -D__DISABLE_EXPORTS \
  		   -Wall -Wstrict-prototypes -march=i386 -mregparm=3 \
 -		   -fno-strict-aliasing -fomit-frame-pointer -fno-pic \
-+		   -fno-strict-aliasing -fomit-frame-pointer -fno-pic -std=gnu99 \
++		   -fno-strict-aliasing -fomit-frame-pointer -fno-pic -std=gnu89 \
  		   -mno-mmx -mno-sse $(call cc-option,-fcf-protection=none)
  
  REALMODE_CFLAGS += -ffreestanding
+diff --git a/arch/x86/boot/compressed/Makefile b/arch/x86/boot/compressed/Makefile
+index 15b7b403a4bd..02b579f2113d 100644
+--- a/arch/x86/boot/compressed/Makefile
++++ b/arch/x86/boot/compressed/Makefile
+@@ -49,6 +49,7 @@ KBUILD_CFLAGS += -Wno-pointer-sign
+ KBUILD_CFLAGS += $(call cc-option,-fmacro-prefix-map=$(srctree)/=)
+ KBUILD_CFLAGS += -fno-asynchronous-unwind-tables
+ KBUILD_CFLAGS += -D__DISABLE_EXPORTS
++KBUILD_CFLAGS += -std=gnu89
+ # Disable relocation relaxation in case the link is not PIE.
+ KBUILD_CFLAGS += $(call cc-option,-Wa$(comma)-mrelax-relocations=no)
+ KBUILD_CFLAGS += -include $(srctree)/include/linux/hidden.h
 diff --git a/arch/x86/realmode/Makefile b/arch/x86/realmode/Makefile
 index a0b491ae2de8..ab2b7ced166b 100644
 --- a/arch/x86/realmode/Makefile
@@ -459,7 +485,12 @@ index ef5045a53ce0..7560d9b1b32c 100644
  # struct randomization only makes sense for Linux internal types, which the EFI
 -- 
 2.34.1
+
 EOF
+
+# git am ../kernel_patches/cflags-fix.patch
+git am ../kernel_patches/v6.1.74/0001*
+git am ../kernel_patches/v6.1.74/0002*
 
 log_build_step "PATCH" "Modifying kernel.spec to apply our new patch"
 
@@ -494,7 +525,11 @@ log_build_step "BUILD" "Building kernel-devel RPM"
 cd ..
 # echo 'KBUILD_CFLAGS += -std=gnu89' >> linux/Makefile
 # CRITICAL: We add V=1 to see the full compiler commands.
-yes "" | make -C linux -j"$(nproc)" binrpm-pkg RPMOPTS="${RPMOPTS:+$RPMOPTS }--with devel"
+# cp mainline/mkspec linux/scripts/package/mkspec
+# cp mainline/build-version linux/scripts/build-version
+# cp mainline/kernel.spec linux/scripts/package/kernel.spec
+# cp mainline/tmp_old/binkernel.spec linux/binkernel.spec
+make -C linux -j"$(nproc)" binrpm-pkg
 log_info "Build complete"
 cd linux
 
