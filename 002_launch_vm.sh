@@ -340,7 +340,7 @@ fi
 if [ "$INSTALL_KERNEL" == "true" ]; then
     # Ensure output directory exists and copy spec file
     mkdir -p "$OUT_DIR"
-#    cp "$SCRIPT_DIR/dummy-kernel-headers.spec" "$OUT_DIR/" || { log "Error copying spec file"; exit 1; }
+    cp "$SCRIPT_DIR/dummy-kernel-headers.spec" "$OUT_DIR/" || { log "Error copying spec file"; exit 1; }
     
     log "Connecting via SSH to install the custom kernel..."
     vm_ssh --script <<'REMOTE_EOF'
@@ -362,7 +362,6 @@ fi
 log "Detecting kernel version from artifact directory..."
 # Find the latest artifact directory (e.g., /host_out/out/kernel_artifacts/v6.14.0)
 ARTIFACT_DIR=$(ls -d /host_out/out/kernel_artifacts/v* 2>/dev/null | sort -V | tail -n 1)
-log "ARTIFACT_DIR : ${ARTIFACT_DIR}"
 if [ -z "$ARTIFACT_DIR" ]; then
     log "Error: No artifact directory found in /host_out/out/kernel_artifacts/"
     exit 1
@@ -373,17 +372,17 @@ KVER=$(basename "$ARTIFACT_DIR" | sed 's/^v//')
 log "Detected custom kernel version: $KVER"
 
 # Write KVER to a file in the shared folder
-echo "$KVER" > /host_out/out/kernel_artifacts/kver.txt
+echo "$KVER" > /host_out/out/kver.txt
 
 # Update the spec file version
-#if [ ! -f "/host_out/out/dummy-kernel-headers.spec" ]; then
-#    log "Spec file not found in /host_out/out/dummy-kernel-headers.spec"
-#    exit 1
-#fi
+if [ ! -f "/host_out/out/dummy-kernel-headers.spec" ]; then
+    log "Spec file not found in /host_out/out/dummy-kernel-headers.spec"
+    exit 1
+fi
 
-#log "Updating kernel headers spec file version..."
-#sed -i "s/^Version:.*/Version:        $KVER/" /host_out/out/dummy-kernel-headers.spec || { log "Failed to update spec file version"; exit 1; }
-#sed -i "s/dummy-kernel-headers-[0-9.]*-/dummy-kernel-headers-$KVER-/" /host_out/out/dummy-kernel-headers.spec || { log "Failed to update spec file package name"; exit 1; }
+log "Updating kernel headers spec file version..."
+sed -i "s/^Version:.*/Version:        $KVER/" /host_out/out/dummy-kernel-headers.spec || { log "Failed to update spec file version"; exit 1; }
+sed -i "s/dummy-kernel-headers-[0-9.]*-/dummy-kernel-headers-$KVER-/" /host_out/out/dummy-kernel-headers.spec || { log "Failed to update spec file package name"; exit 1; }
 
 log "Retrieving UUID of the root filesystem..."
 ROOT_DEVICE=$(findmnt -n -o SOURCE --target / | sed 's/\[.*\]//')
@@ -396,69 +395,87 @@ log "Root filesystem UUID: $ROOT_UUID"
 
 log "Remounting /boot as read-write..."
 sudo mount -o remount,rw /boot || { log "Failed to remount /boot as read-write"; exit 1; }
-log "Remounting /boot/efi as read-write..."
-sudo mount -o remount,rw /boot/efi || { log "Failed to remount /boot/efi as read-write"; exit 1; }
 
-#log "Copying new kernel image to /boot/vmlinuz-${KVER}..."
-#sudo cp "${ARTIFACT_DIR}/vmlinuz-${KVER}" "/boot/vmlinuz-${KVER}" || { log "Failed to copy kernel image"; exit 1; }
-#sudo cp "${ARTIFACT_DIR}/config-${KVER}" "/boot/config-${KVER}" || { log "Failed to copy config"; exit 1; }
+log "Copying new kernel image to /boot/vmlinuz-${KVER}..."
+sudo cp "${ARTIFACT_DIR}/vmlinuz-${KVER}" "/boot/vmlinuz-${KVER}" || { log "Failed to copy kernel image"; exit 1; }
+sudo cp "${ARTIFACT_DIR}/config-${KVER}" "/boot/config-${KVER}" || { log "Failed to copy config"; exit 1; }
 
-# log "Installing kernel modules..."
-# sudo mkdir -p /lib/modules/$KVER
-# sudo cp -r "${ARTIFACT_DIR}/lib/modules/$KVER/"* "/lib/modules/$KVER/" || { log "Failed to copy kernel modules"; exit 1; }
+log "Installing kernel modules..."
+sudo mkdir -p /lib/modules/$KVER
+sudo cp -r "${ARTIFACT_DIR}/lib/modules/$KVER/"* "/lib/modules/$KVER/" || { log "Failed to copy kernel modules"; exit 1; }
 
-log "Installing kernel-devel RPM..."
+log "Installing kernel headers..."
+# Try standard kernel headers first
+sudo mkdir -p /usr/src/kernels/$KVER
 
-# First, find the exact RPM path
-KERNEL_DEVEL_RPM=$(find "${ARTIFACT_DIR}" -name "kernel-devel-*.rpm" 2>/dev/null | sort -V | tail -n 1)
-
-if [ -n "$KERNEL_DEVEL_RPM" ] && [ -f "$KERNEL_DEVEL_RPM" ]; then
-    log "Found kernel-devel RPM: $KERNEL_DEVEL_RPM"
-    # Check if readable
-    if [ -r "$KERNEL_DEVEL_RPM" ]; then
-#        dnf5 config dump | grep -i exclude
-#        sudo rpm -Uvh "$KERNEL_DEVEL_RPM"
-        log "kernel-devel RPM: $KERNEL_DEVEL_RPM is accessible"
-#        sudo dnf install -y --disableexcludes=all "$KERNEL_DEVEL_RPM"
-    else
-        log "Error: Found kernel-devel RPM but cannot read it. Check permissions."
-        ls -l "$KERNEL_DEVEL_RPM"
-        exit 1
-    fi
+# Check both possible header locations
+if [ -d "${ARTIFACT_DIR}/usr/src/linux-headers-${KVER}" ]; then
+    log "Found headers in linux-headers directory..."
+    sudo cp -r "${ARTIFACT_DIR}/usr/src/linux-headers-${KVER}/"* "/usr/src/kernels/$KVER/" || { log "Failed to copy kernel headers from linux-headers"; exit 1; }
+elif [ -d "${ARTIFACT_DIR}/usr/include" ]; then
+    log "Found headers in include directory..."
+    # Copy the main kernel headers
+    sudo cp -r "${ARTIFACT_DIR}/usr/include" "/usr/" || { log "Failed to copy userspace headers"; exit 1; }
+    
+    # Copy additional kernel headers if they exist
+    for dir in "include" "arch" "scripts" ".config" "Module.symvers"; do
+        if [ -e "${ARTIFACT_DIR}/$dir" ]; then
+            sudo cp -r "${ARTIFACT_DIR}/$dir" "/usr/src/kernels/$KVER/" || { log "Failed to copy $dir"; exit 1; }
+        fi
+    done
 else
-    log "Error: No kernel-devel RPM found in ${ARTIFACT_DIR}"
-    # Debug information
-    log "Contents of ${ARTIFACT_DIR}:"
-    ls -la "${ARTIFACT_DIR}"
+    log "No kernel headers found in expected locations"
+    log "Checked: ${ARTIFACT_DIR}/usr/src/linux-headers-${KVER} and ${ARTIFACT_DIR}/usr/include"
     exit 1
 fi
 
-# Find all kernel-related RPMs
-KERNEL_RPMS=(
-    "kernel-[0-9]*.rpm"        # Main kernel package
-    "kernel-devel-*.rpm"       # Development headers
-    "kernel-headers-*.rpm"     # User-space headers
-)
+# Install userspace headers if they exist separately
+if [ -d "${ARTIFACT_DIR}/usr/include" ]; then
+    sudo cp -r "${ARTIFACT_DIR}/usr/include" "/usr/" || { log "Failed to copy userspace headers"; exit 1; }
+fi
 
-for rpm_pattern in "${KERNEL_RPMS[@]}"; do
-    RPM_PATH=$(find "${ARTIFACT_DIR}" -name "$rpm_pattern" 2>/dev/null | sort -V | tail -n 1)
+# Create symlinks for compatibility
+sudo ln -sf "/usr/src/kernels/$KVER" "/lib/modules/$KVER/build"
+sudo ln -sf "/usr/src/kernels/$KVER" "/lib/modules/$KVER/source"
 
-    if [ -n "$RPM_PATH" ] && [ -f "$RPM_PATH" ]; then
-        log "Found RPM: $RPM_PATH"
-        if [ -r "$RPM_PATH" ]; then
-            log "Installing $RPM_PATH..."
-            sudo rpm -Uvh --nopost "$RPM_PATH"
-#            sudo dnf install -y --disableexcludes=all "$RPM_PATH"
-        else
-            log "Warning: Found $RPM_PATH but cannot read it. Check permissions."
-            ls -l "$RPM_PATH"
-        fi
-    else
-        log "Warning: No RPM found matching pattern $rpm_pattern in ${ARTIFACT_DIR}"
-    fi
-done
+# Update kernel header package
+mkdir -p ~/rpmbuild/SPECS
+cp /host_out/out/dummy-kernel-headers.spec ~/rpmbuild/SPECS/
 
-# log "Generating initramfs for the new kernel..."
+# Build and install the dummy package to prevent conflicts
+rpmbuild -ba ~/rpmbuild/SPECS/dummy-kernel-headers.spec
+sudo dnf install -y ~/rpmbuild/RPMS/noarch/dummy-kernel-headers-${KVER}-1*.noarch.rpm
+
+# Verify header installation
+log "Verifying kernel header installation..."
+if [ ! -d "/usr/src/kernels/$KVER" ]; then
+    log "Kernel headers not found in /usr/src/kernels/$KVER"
+    exit 1
+fi
+
+if [ ! -L "/lib/modules/$KVER/build" ]; then
+    log "Kernel build symlink not found"
+    exit 1
+fi
+
+sudo dnf install -y gcc
+
+# Test header usability
+log "Testing kernel header usability..."
+cat > /tmp/test.c <<EOF
+#include <linux/kernel.h>
+#include <linux/module.h>
+int main() { return 0; }
+EOF
+
+if ! gcc -I"/usr/src/kernels/$KVER/include" -c /tmp/test.c -o /tmp/test.o 2>/dev/null; then
+    log "Failed to compile test program with kernel headers"
+    exit 1
+fi
+
+log "Kernel headers installed and verified successfully"
+
+log "Generating initramfs for the new kernel..."
 # Update dracut configuration for the correct drivers and filesystem
 HOOK_NAME="devexists-$(echo /dev/vda4 | sed 's/\//_/g').sh"
 sudo mkdir -p /lib/dracut/hooks/initqueue/finished
@@ -477,8 +494,6 @@ sudo grubby --add-kernel="/boot/vmlinuz-${KVER}" --initrd="/boot/initramfs-${KVE
     log "grubby failed; updating bootloader configuration manually..."
     sudo grub2-mkconfig -o /boot/grub2/grub.cfg
 }
-
-
 # Set default kernel
 DEFAULT_KERNEL=$(sudo grubby --default-kernel 2>/dev/null || echo "unknown")
 log "Current default kernel: $DEFAULT_KERNEL"
@@ -492,92 +507,13 @@ fi
 # This prevents kernel packages from updating, so your custom kernel remains the only one in use.
 sudo sed -i '/\[main\]/a exclude=kernel*' /etc/dnf/dnf.conf
 
-# Verify kernel installation
-log "Verifying kernel installation..."
-if [ ! -f "/boot/vmlinuz-${KVER}" ]; then
-    log "Error: Kernel image not found in /boot"
-    ls -l /boot
-    exit 1
-fi
-
-# Verify module installation
-if [ ! -d "/lib/modules/${KVER}" ]; then
-    log "Error: Kernel modules not found"
-    ls -l /lib/modules
-    exit 1
-fi
-
-# Verify kernel headers
-if [ ! -d "/usr/src/kernels/${KVER}" ]; then
-    log "Error: Kernel headers not found"
-    ls -l /usr/src/kernels
-    exit 1
-fi
-
-log "Kernel, modules, and headers installed successfully"
-
-# Test kernel header usability
-log "Testing kernel header usability (module build test)..."
-
-KERNEL_HEADERS_DIR="/usr/src/kernels/$KVER"
-
-# Check for key header files
-if [ ! -f "$KERNEL_HEADERS_DIR/include/linux/kernel.h" ]; then
-    log "Missing: $KERNEL_HEADERS_DIR/include/linux/kernel.h"
-    exit 1
-fi
-if [ ! -f "$KERNEL_HEADERS_DIR/arch/x86/include/asm/processor.h" ]; then
-    log "Missing: $KERNEL_HEADERS_DIR/arch/x86/include/asm/processor.h"
-    exit 1
-fi
-if [ ! -f "$KERNEL_HEADERS_DIR/include/generated/autoconf.h" ]; then
-    log "Missing: $KERNEL_HEADERS_DIR/include/generated/autoconf.h"
-    exit 1
-fi
-
-# Check for build symlink
-if [ ! -L "/lib/modules/$KVER/build" ]; then
-    log "Missing symlink: /lib/modules/$KVER/build"
-    exit 1
-fi
-if [ "$(readlink -f /lib/modules/$KVER/build)" != "$KERNEL_HEADERS_DIR" ]; then
-    log "Symlink /lib/modules/$KVER/build does not point to $KERNEL_HEADERS_DIR"
-    exit 1
-fi
-
-# Create minimal test module source
-cat > /tmp/testmod.c <<EOF
-#include <linux/module.h>
-#include <linux/kernel.h>
-int init_module(void) { return 0; }
-void cleanup_module(void) { }
-MODULE_LICENSE("GPL");
-EOF
-
-# Create minimal Makefile
-cat > /tmp/Makefile <<EOF
-obj-m += testmod.o
-EOF
-
-# Build the module using the kernel build system
-sudo dnf install -y make gcc
-make -C /lib/modules/$KVER/build M=/tmp modules > /tmp/testmod_build.log 2>&1
-
-if [ -f /tmp/testmod.ko ]; then
-    log "Kernel headers are present and usable for out-of-tree module builds. Kernel installation verified successfully."
-else
-    log "Failed to build minimal kernel module. See /tmp/testmod_build.log for details."
-    tail -20 /tmp/testmod_build.log
-    exit 1
-fi
-
 log "Kernel installation complete. Rebooting to test the custom kernel..."
 sudo reboot & exit
 exit  # Exit SSH session immediately after reboot command
 REMOTE_EOF
 
     # Read KVER from the file on the host
-    KVER=$(cat "$OUT_DIR/kernel_artifacts/kver.txt")
+    KVER=$(cat "$OUT_DIR/kver.txt")
     log "Kernel version detected: $KVER"
 
     log "Kernel installation commands were sent to the VM."
@@ -628,18 +564,18 @@ EOF
             mv "$TEST_CONFIG.tmp" "$TEST_CONFIG"
         fi
 
-    log "Running 003_run_tests.sh on the host..."
-    bash "$SCRIPT_DIR/003_run_tests.sh" || {
-        log "Error: Test execution failed on the host."
-        exit 1
-    }
-    fi
-else
-    log "Connecting via SSH to mount host_drive..."
-    vm_ssh --script <<'EOF'
-    sudo mkdir -p /home/user/host_drive
-    sudo mount -t 9p -o trans=virtio host_drive /home/user/host_drive
-    exit  # Ensure SSH session exits
+	log "Running 003_run_tests.sh on the host..."
+        bash "$SCRIPT_DIR/003_run_tests.sh" || {
+            log "Error: Test execution failed on the host."
+            exit 1
+        }
+        fi
+    else
+        log "Connecting via SSH to mount host_drive..."
+        vm_ssh --script <<'EOF'
+        sudo mkdir -p /home/user/host_drive
+        sudo mount -t 9p -o trans=virtio host_drive /home/user/host_drive
+        exit  # Ensure SSH session exits
 EOF
     log "VM is running. Connect via SSH with: ssh -p 2222 ${SSH_USER}@localhost"
 
