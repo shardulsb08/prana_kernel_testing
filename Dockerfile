@@ -45,4 +45,6 @@ RUN chmod +x /usr/local/bin/build_kernel_fedora.sh
 VOLUME ["/build"]
 
 # Use the build script as the container entrypoint
-ENTRYPOINT ["/usr/local/bin/build_kernel_fedora.sh"]
+# Disabling this for brf environment setup phase. Will see if 
+# setting up automated script is feasible later.
+# ENTRYPOINT ["/usr/local/bin/build_kernel_fedora.sh"]

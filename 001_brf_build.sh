@@ -1,0 +1,67 @@
+#!/bin/bash
+
+# Changes for BFR setup/dependencies
+append_to_dnf_install_bash() {
+    local dockerfile_path="Dockerfile"
+    local string_to_append="$1"
+
+    # Check if a string to append was provided
+    if [ -z "$string_to_append" ]; then
+        echo "Error: String to append cannot be empty."
+        echo "Usage: append_to_dnf_install_bash \"<string_to_append>\""
+        return 1
+    fi
+
+    # Check if the Dockerfile exists
+    if [ ! -f "$dockerfile_path" ]; then
+        echo "Error: Dockerfile not found at '$dockerfile_path'."
+        return 1
+    fi
+
+    local found_match_and_modified=0
+
+    # Define the sed script using a here-document with a quoted delimiter ('EOF_SED').
+    # This prevents Bash from interpreting backslashes or variables within the sed script,
+    # ensuring the sed commands are passed literally.
+    # We use a placeholder '__STRING_TO_APPEND__' for the string to be appended.
+    local sed_script=$(cat <<'EOF_SED'
+/dnf -y install/{
+    :a
+    N
+    /\n[[:space:]]*dnf clean all/!ba
+    # Pattern space now contains:
+    # "dnf -y install \n"
+    # "    package1 \n"
+    # ...
+    # "    last_package && \n" (or just "    last_package \n")
+    # "    dnf clean all"
+    s/([[:space:]]*[^[:space:]]+)([[:space:]]*&& \\\\)?\n([[:space:]]*dnf clean all)/\1 __STRING_TO_APPEND__\2\n\3/
+    s/([[:space:]]+dnf -y install[[:space:]]*\\)(\n[[:space:]]*dnf clean all)/\1 __STRING_TO_APPEND__\2/
+}
+EOF_SED
+)
+
+    # Now, replace the placeholder with the actual string_to_append and pipe the result
+    # to sed to apply the changes to the Dockerfile.
+    # We use `sed -f -` to read the script from standard input.
+    echo "$sed_script" | sed -e "s/__STRING_TO_APPEND__/${string_to_append}/g" | sed -E -i.bak -f - "$dockerfile_path"
+
+    # Check if sed created a backup file, indicating it ran and potentially modified.
+    if [ -f "${dockerfile_path}.bak" ]; then
+        # Compare the original and modified files to confirm actual changes
+        if ! cmp -s "$dockerfile_path" "${dockerfile_path}.bak"; then
+            found_match_and_modified=1
+            echo -e "\nDockerfile '$dockerfile_path' updated successfully."
+        else
+            echo -e "\nNo 'dnf -y install' lines found with the specified pattern in '$dockerfile_path'. No changes made."
+        fi
+        rm "${dockerfile_path}.bak" # Clean up the backup file
+    else
+        echo -e "\nNo 'dnf -y install' lines found with the specified pattern in '$dockerfile_path'. No changes made."
+    fi
+}
+
+append_to_dnf_install_bash cmake
+
+docker build -t kernel-builder-fedora-brf-test-dnf-append .
+docker run -it -v "$(pwd)/container_kernel_workspace":/build -v "$(pwd)":/prana_kernel_testing --name kernel-builder-fedora-container-brf-test-dnf-append kernel-builder-fedora-brf-test-dnf-append /bin/bash
