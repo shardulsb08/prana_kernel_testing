@@ -34,7 +34,6 @@ KERNEL_CONFIG_DIR="${KERNEL_CONFIG_DIR:-${PWD}/configs/kernel}"
 # Kernel mode configurations
 declare -A KERNEL_MODES=(
     [LOCAL]="default development mode"
-    [LOCAL_TMP]="default development mode"
     [SYZKALLER]="syzkaller testing mode"
     [SYZGEN]="syzgen++ testing mode"
 )
@@ -42,7 +41,6 @@ declare -A KERNEL_MODES=(
 # Kernel configuration files
 declare -A KERNEL_CONFIGS=(
     [LOCAL]="base/config-base"
-    [LOCAL_TMP]="base/config-base"
     [SYZKALLER]="syzkaller/config-syzkaller"
     [SYZGEN]="syzgen/config-syzgen"
 )
@@ -50,7 +48,6 @@ declare -A KERNEL_CONFIGS=(
 # Kernel build targets
 declare -A KERNEL_TARGETS=(
     [LOCAL]="bzImage"
-    [LOCAL_TMP]="bzImage"
     [SYZKALLER]="bzImage"
     [SYZGEN]="bzImage"
 )
@@ -123,5 +120,5 @@ get_current_kernel_mode() {
 
 # Set default configuration if not already set
 if [[ -z "${KERNEL_MODE:-}" ]]; then
-    setup_kernel_config "LOCAL_TMP"
+    setup_kernel_config "LOCAL"
 fi 

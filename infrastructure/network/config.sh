@@ -33,7 +33,6 @@ fi
 # Network mode configurations
 declare -A NETWORK_MODES=(
     [LOCAL]="default development mode"
-    [LOCAL_TMP]="default development mode"
     [SYZKALLER]="syzkaller testing mode"
     [SYZGEN]="syzgen++ testing mode"
 )
@@ -41,7 +40,6 @@ declare -A NETWORK_MODES=(
 # Port configurations
 declare -A VM_PORTS=(
     [LOCAL]=2222
-    [LOCAL_TMP]=2223
     [SYZKALLER]=2222
     [SYZGEN]=10021
 )
@@ -49,7 +47,6 @@ declare -A VM_PORTS=(
 # Host configurations
 declare -A SSH_HOSTS=(
     [LOCAL]="localhost"
-    [LOCAL_TMP]="localhost"
     [SYZKALLER]="localhost"
     [SYZGEN]="127.0.0.1"
 )
@@ -57,7 +54,6 @@ declare -A SSH_HOSTS=(
 # Port forwarding configurations
 declare -A VM_HOSTFWD=(
     [LOCAL]="tcp::2222-:22"
-    [LOCAL_TMP]="tcp::2223-:22"
     [SYZKALLER]="tcp::2222-:22"
     [SYZGEN]="tcp:127.0.0.1:10021-:22"
 )
@@ -128,5 +124,5 @@ get_current_network_mode() {
 
 # Set default configuration if not already set
 if [[ -z "${NETWORK_MODE:-}" ]]; then
-    setup_network_config "LOCAL_TMP"
+    setup_network_config "LOCAL"
 fi 
