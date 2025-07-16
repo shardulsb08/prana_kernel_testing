@@ -28,7 +28,8 @@ RUN dnf -y update && \
         rsync  \
         hostname \
         dwarves \
-        git && \
+        git \
+	cmake && \
     dnf clean all
 
 WORKDIR /build

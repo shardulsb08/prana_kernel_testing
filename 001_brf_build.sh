@@ -29,14 +29,19 @@ append_to_dnf_install_bash() {
     :a
     N
     /\n[[:space:]]*dnf clean all/!ba
-    # Pattern space now contains:
-    # "dnf -y install \n"
-    # "    package1 \n"
-    # ...
-    # "    last_package && \n" (or just "    last_package \n")
-    # "    dnf clean all"
-    s/([[:space:]]*[^[:space:]]+)([[:space:]]*&& \\\\)?\n([[:space:]]*dnf clean all)/\1 __STRING_TO_APPEND__\2\n\3/
-    s/([[:space:]]+dnf -y install[[:space:]]*\\)(\n[[:space:]]*dnf clean all)/\1 __STRING_TO_APPEND__\2/
+    # This substitution targets the last package line ending with ' && \' or just a '\' for continuation.
+    # It ensures the new package is inserted BEFORE the '&& \' or just '\' part.
+    # Group 1: Leading spaces + package name (e.g., "        git")
+    # Group 2: Any spaces immediately after the package name (optional).
+    # Group 3: The optional '&&' part (e.g., "&&").
+    # Group 4: Any spaces after '&&' and before the literal '\' (e.g., " ").
+    # Group 5: The literal '\' character at the end of the line (e.g., "\\") - now a separate group.
+    # Group 6: The newline + 'dnf clean all' line (e.g., "\n    dnf clean all").
+    s/([[:space:]]*[^[:space:]]+)([[:space:]]*)(&&[[:space:]]*)?([[:space:]]*\\\\)?\n([[:space:]]*dnf clean all)/\1 __STRING_TO_APPEND__\2\3\4\n\5/
+    
+    # This second substitution handles the edge case where 'dnf -y install \' is immediately
+    # followed by 'dnf clean all' (no packages in between).
+    s/([[:space:]]+dnf -y install[[:space:]]*)(\\\\)?(\n[[:space:]]*dnf clean all)/\1 __STRING_TO_APPEND__\2\n\3/
 }
 EOF_SED
 )
@@ -60,8 +65,7 @@ EOF_SED
         echo -e "\nNo 'dnf -y install' lines found with the specified pattern in '$dockerfile_path'. No changes made."
     fi
 }
-
-append_to_dnf_install_bash cmake
+# append_to_dnf_install_bash cmake
 
 docker build -t kernel-builder-fedora-brf-test-dnf-append .
 docker run -it -v "$(pwd)/container_kernel_workspace":/build -v "$(pwd)":/prana_kernel_testing --name kernel-builder-fedora-container-brf-test-dnf-append kernel-builder-fedora-brf-test-dnf-append /bin/bash

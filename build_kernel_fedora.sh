@@ -7,44 +7,6 @@ log() {
     echo "[$(date +"%Y-%m-%d %H:%M:%S")] $*"
 }
 
-# Function to apply kernel configurations from a file
-apply_kernel_configs() {
-    local config_file=$1
-    log "Applying configurations from $config_file..."
-    while IFS= read -r line; do
-        # Skip comments and empty lines
-        if [[ "$line" =~ ^# ]] || [ -z "$line" ]; then
-            continue
-        fi
-        # Extract config name and value
-        config=$(echo "$line" | cut -d= -f1)
-        value=$(echo "$line" | cut -d= -f2)
-        case "$value" in
-            "y")
-                scripts/config --file .config --enable "$config"
-                ;;
-            "m")
-                scripts/config --file .config --module "$config"
-                ;;
-            "n")
-                scripts/config --file .config --disable "$config"
-                ;;
-            *)
-                if [[ "$value" =~ ^[0-9]+$ ]]; then
-                    # Handle numeric values
-                    scripts/config --file .config --set-val "$config" "$value"
-                elif [[ "$value" =~ ^\".*\"$ ]]; then
-                    # Handle string values (remove quotes)
-                    val="${value:1:-1}"
-                    scripts/config --file .config --set-str "$config" "$val"
-                else
-                    log "Warning: Unknown value '$value' for $config in $config_file"
-                fi
-                ;;
-        esac
-    done < "$config_file"
-}
-
 # Function to update a specific kernel configuration value
 update_config() {
     local input_config="$1"
@@ -72,6 +34,45 @@ update_config() {
         # If the config is not found in the .config file at all
         log "$input_config not found in existing .config, if you want it, add it to an appropriate config file"
     fi
+}
+
+# Function to apply kernel configurations from a file
+apply_kernel_configs() {
+    local config_file=$1
+    log "Applying configurations from $config_file..."
+    while IFS= read -r line; do
+        # Skip comments and empty lines
+        if [[ "$line" =~ ^# ]] || [ -z "$line" ]; then
+            continue
+        fi
+        # Extract config name and value
+        config=$(echo "$line" | cut -d= -f1)
+        value=$(echo "$line" | cut -d= -f2)
+#	update_config "$config" "$value"
+        case "$value" in
+            "y")
+                scripts/config --file .config --enable "$config"
+                ;;
+            "m")
+                scripts/config --file .config --module "$config"
+                ;;
+            "n")
+                scripts/config --file .config --disable "$config"
+                ;;
+            *)
+                if [[ "$value" =~ ^[0-9]+$ ]]; then
+                    # Handle numeric values
+                    scripts/config --file .config --set-val "$config" "$value"
+                elif [[ "$value" =~ ^\".*\"$ ]]; then
+                    # Handle string values (remove quotes)
+                    val="${value:1:-1}"
+                    scripts/config --file .config --set-str "$config" "$val"
+                else
+                    log "Warning: Unknown value '$value' for $config in $config_file"
+                fi
+                ;;
+        esac
+    done < "$config_file"
 }
 
 # Create output directory for artifacts
@@ -265,7 +266,7 @@ fi
 
 # 3. Update configuration
 log "Updating kernel configuration with 'make olddefconfig'..."
-make olddefconfig
+# make olddefconfig
 
 # Determine the full kernel version
 log "Determining full kernel version..."
@@ -285,6 +286,12 @@ if [ -f /build_input/test_config.txt ]; then
 		apply_kernel_configs /build_input/fuzz_config_untouched_only.config
 	else
 		log_error "/build_input/fuzz_config_untouched_only.config not found"
+		exit 1
+	fi
+        if [ -f /build_input/kernel_brf.config ]; then
+		apply_kernel_configs /build_input/kernel_brf.config
+	else
+		log_error "/build_input/kernel_brf.config not found"
 		exit 1
 	fi
     elif grep -q '^syzgen_config_raw\b' /build_input/test_config.txt; then
@@ -316,199 +323,199 @@ log "Updating kernel configuration with 'make olddefconfig'..."
 make olddefconfig
 #update_config CONFIG_LOCALVERSION '"_custombuild"'
 
-#  scripts/config --file .config --disable CONFIG_LOCK_TORTURE_TEST
-#  scripts/config --file .config --disable CONFIG_RCU_TORTURE_TEST
-#  update_config CONFIG_LOCK_TORTURE_TEST n
-#  update_config CONFIG_RCU_TORTURE_TEST n
-#  scripts/config --file .config --enable CONFIG_KASAN
-#  scripts/config --file .config --enable CONFIG_KASAN_INLINE
-#  scripts/config --file .config --disable CONFIG_PROVE_RCU
-#  scripts/config --file .config --disable CONFIG_WW_MUTEX_SELFTEST
-#  scripts/config --file .config --disable CONFIG_TORTURE_TEST
-#  scripts/config --file .config --disable CONFIG_TEST_VMALLOC
-#  scripts/config --file .config --disable CONFIG_REED_SOLOMON_TEST
-#  scripts/config --file .config --enable CONFIG_ASYNC_RAID6_TEST
-#  scripts/config --file .config --disable CONFIG_DMABUF_SELFTESTS
-#  scripts/config --file .config --disable CONFIG_FIPS_SIGNATURE_SELFTEST
-#  scripts/config --file .config --disable CONFIG_FIPS_SIGNATURE_SELFTEST_RSA
-#  scripts/config --file .config --disable CONFIG_FIPS_SIGNATURE_SELFTEST_ECDSA
-#  scripts/config --file .config --disable CONFIG_GLOB_SELFTEST
-#  scripts/config --file .config --disable CONFIG_DEBUG_LOCKING_API_SELFTESTS
-#  scripts/config --file .config --disable CONFIG_SCF_TORTURE_TEST
-#  scripts/config --file .config --disable CONFIG_X86_DECODER_SELFTEST
-#  scripts/config --file .config --disable CONFIG_BACKTRACE_SELF_TEST
-#  scripts/config --file .config --disable CONFIG_KALLSYMS_SELFTEST
-#  scripts/config --file .config --disable CONFIG_DEBUG_OBJECTS_SELFTEST
-#  scripts/config --file .config --disable CONFIG_BINFMT_ELF_KUNIT_TEST
-#  scripts/config --file .config --disable CONFIG_DAMON_KUNIT_TEST
-#  scripts/config --file .config --disable CONFIG_DAMON_SYSFS_KUNIT_TEST
-#  scripts/config --file .config --disable CONFIG_DAMON_VADDR_KUNIT_TEST
-#  # scripts/config --file .config --disable
-#  scripts/config --file .config --disable CONFIG_DEBUG_RODATA_TEST
-#  scripts/config --file .config --disable CONFIG_DMAPOOL_TEST
-#  scripts/config --file .config --disable CONFIG_DRM_SCHED_KUNIT_TEST
-#  scripts/config --file .config --disable CONFIG_DRM_VKMS_KUNIT_TEST
-#  scripts/config --file .config --disable CONFIG_EFI_TEST #m
-#  scripts/config --file .config --disable CONFIG_EXEC_KUNIT_TEST
-#  scripts/config --file .config --disable CONFIG_FPGA_KUNIT_TESTS
-#  scripts/config --file .config --disable CONFIG_GUP_TEST
-#  scripts/config --file .config --disable CONFIG_HW_BREAKPOINT_KUNIT_TEST
-#  scripts/config --file .config --disable CONFIG_INITRAMFS_TEST
-#  scripts/config --file .config --disable CONFIG_INTERVAL_TREE_TEST
-#  scripts/config --file .config --disable CONFIG_KPROBE_EVENT_GEN_TEST
-#  scripts/config --file .config --disable CONFIG_LEDS_KUNIT_TEST
-#  scripts/config --file .config --disable CONFIG_MAILBOX_TEST
-#  scripts/config --file .config --disable CONFIG_MCTP_TEST
-#  scripts/config --file .config --disable CONFIG_NITRO_ENCLAVES_MISC_DEV_TEST
-#  scripts/config --file .config --disable CONFIG_OF_KUNIT_TEST
-#  scripts/config --file .config --disable CONFIG_OF_OVERLAY_KUNIT_TEST
-#  scripts/config --file .config --disable CONFIG_OF_UNITTEST
-#  scripts/config --file .config --disable CONFIG_PCI_ENDPOINT_TEST
-#  scripts/config --file .config --disable CONFIG_PERCPU_TEST
-#  scripts/config --file .config --disable CONFIG_PKCS7_TEST_KEY
-#  scripts/config --file .config --disable CONFIG_PM_QOS_KUNIT_TEST
-#  scripts/config --file .config --disable CONFIG_PREEMPTIRQ_DELAY_TEST
-#  scripts/config --file .config --disable CONFIG_RANDSTRUCT_KUNIT_TEST
-#  scripts/config --file .config --disable CONFIG_RBTREE_TEST
-#  scripts/config --file .config --disable CONFIG_RCU_REF_SCALE_TEST
-#  scripts/config --file .config --disable CONFIG_RCU_SCALE_TEST
-#  scripts/config --file .config --disable CONFIG_RTC_DRV_TEST
-#  scripts/config --file .config --disable CONFIG_SECURITY_APPARMOR_KUNIT_TEST
-#  scripts/config --file .config --disable CONFIG_SECURITY_IPE_KUNIT_TEST
-#  scripts/config --file .config --disable CONFIG_SECURITY_LANDLOCK_KUNIT_TEST
-#  scripts/config --file .config --disable CONFIG_TEST_ASYNC_DRIVER_PROBE
-#  scripts/config --file .config --disable CONFIG_TEST_BITMAP
-#  scripts/config --file .config --disable CONFIG_TEST_BITOPS
-#  scripts/config --file .config --disable CONFIG_TEST_DHRY
-#  scripts/config --file .config --disable CONFIG_TEST_DIV64
-#  scripts/config --file .config --disable CONFIG_TEST_FIRMWARE
-#  scripts/config --file .config --disable CONFIG_TEST_FREE_PAGES
-#  scripts/config --file .config --disable CONFIG_TEST_HEXDUMP
-#  scripts/config --file .config --disable CONFIG_TEST_HMM #m
-#  scripts/config --file .config --disable CONFIG_TEST_IDA
-#  scripts/config --file .config --disable CONFIG_TEST_KMOD
-#  scripts/config --file .config --disable CONFIG_TEST_LKM
-#  scripts/config --file .config --disable CONFIG_TEST_MAPLE_TREE
-#  scripts/config --file .config --disable CONFIG_TEST_MEMCAT_P
-#  scripts/config --file .config --disable CONFIG_TEST_MEMINIT
-#  scripts/config --file .config --disable CONFIG_TEST_MIN_HEAP
-#  scripts/config --file .config --disable CONFIG_TEST_REF_TRACKER
-#  scripts/config --file .config --disable CONFIG_TEST_RHASHTABLE
-#  scripts/config --file .config --disable CONFIG_TEST_STATIC_KEYS
-#  scripts/config --file .config --disable CONFIG_TEST_SYSCTL
-#  scripts/config --file .config --disable CONFIG_TEST_UBSAN
-#  scripts/config --file .config --disable CONFIG_TEST_UDELAY
-#  scripts/config --file .config --disable CONFIG_TEST_UUID
-#  scripts/config --file .config --disable CONFIG_TEST_XARRAY
-#  scripts/config --file .config --disable CONFIG_USB4_KUNIT_TEST
-#  scripts/config --file .config --disable CONFIG_VCAP_KUNIT_TEST
-#  scripts/config --file .config --disable CONFIG_XZ_DEC_TEST
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  # scripts/config --file .config --disable
-#  update_config CONFIG_PROVE_RCU n
-#  update_config CONFIG_WW_MUTEX_SELFTEST n
-#  update_config CONFIG_TORTURE_TEST n
-#  update_config CONFIG_TEST_VMALLOC n
-#  update_config CONFIG_REED_SOLOMON_TEST n
-#  update_config CONFIG_ASYNC_RAID6_TEST m
-#  update_config CONFIG_DMABUF_SELFTESTS n
-#  update_config CONFIG_FIPS_SIGNATURE_SELFTEST n
-#  update_config CONFIG_FIPS_SIGNATURE_SELFTEST_RSA n
-#  update_config CONFIG_FIPS_SIGNATURE_SELFTEST_ECDSA n
-#  update_config CONFIG_GLOB_SELFTEST n
-#  update_config CONFIG_DEBUG_LOCKING_API_SELFTESTS n
-#  update_config CONFIG_SCF_TORTURE_TEST n
-#  update_config CONFIG_X86_DECODER_SELFTEST n
-#  update_config CONFIG_BACKTRACE_SELF_TEST n
-#  update_config CONFIG_KALLSYMS_SELFTEST n
-#  update_config CONFIG_DEBUG_OBJECTS_SELFTEST n
-#  update_config CONFIG_BINFMT_ELF_KUNIT_TEST n
-#  update_config CONFIG_DAMON_KUNIT_TEST n
-#  update_config CONFIG_DAMON_SYSFS_KUNIT_TEST n
-#  update_config CONFIG_DAMON_VADDR_KUNIT_TEST n
-#  # update_config  n
-#  update_config CONFIG_DEBUG_RODATA_TEST n
-#  update_config CONFIG_DMAPOOL_TEST n
-#  update_config CONFIG_DRM_SCHED_KUNIT_TEST n
-#  update_config CONFIG_DRM_VKMS_KUNIT_TEST n
-#  update_config CONFIG_EFI_TEST m
-#  update_config CONFIG_EXEC_KUNIT_TEST n
-#  update_config CONFIG_FPGA_KUNIT_TESTS n
-#  update_config CONFIG_GUP_TEST n
-#  update_config CONFIG_HW_BREAKPOINT_KUNIT_TEST n
-#  update_config CONFIG_INITRAMFS_TEST n
-#  update_config CONFIG_INTERVAL_TREE_TEST n
-#  update_config CONFIG_KPROBE_EVENT_GEN_TEST n
-#  update_config CONFIG_LEDS_KUNIT_TEST n
-#  update_config CONFIG_MAILBOX_TEST n
-#  update_config CONFIG_MCTP_TEST n
-#  update_config CONFIG_NITRO_ENCLAVES_MISC_DEV_TEST n
-#  update_config CONFIG_OF_KUNIT_TEST n
-#  update_config CONFIG_OF_OVERLAY_KUNIT_TEST n
-#  update_config CONFIG_OF_UNITTEST n
-#  update_config CONFIG_PCI_ENDPOINT_TEST n
-#  update_config CONFIG_PERCPU_TEST n
-#  update_config CONFIG_PKCS7_TEST_KEY n
-#  update_config CONFIG_PM_QOS_KUNIT_TEST n
-#  update_config CONFIG_PREEMPTIRQ_DELAY_TEST n
-#  update_config CONFIG_RANDSTRUCT_KUNIT_TEST n
-#  update_config CONFIG_RBTREE_TEST n
-#  update_config CONFIG_RCU_REF_SCALE_TEST n
-#  update_config CONFIG_RCU_SCALE_TEST n
-#  update_config CONFIG_RTC_DRV_TEST n
-#  update_config CONFIG_SECURITY_APPARMOR_KUNIT_TEST n
-#  update_config CONFIG_SECURITY_IPE_KUNIT_TEST n
-#  update_config CONFIG_SECURITY_LANDLOCK_KUNIT_TEST n
-#  update_config CONFIG_TEST_ASYNC_DRIVER_PROBE n
-#  update_config CONFIG_TEST_BITMAP n
-#  update_config CONFIG_TEST_BITOPS n
-#  update_config CONFIG_TEST_DHRY n
-#  update_config CONFIG_TEST_DIV64 n
-#  update_config CONFIG_TEST_FIRMWARE n
-#  update_config CONFIG_TEST_FREE_PAGES n
-#  update_config CONFIG_TEST_HEXDUMP n
-#  update_config CONFIG_TEST_HMM m
-#  update_config CONFIG_TEST_IDA n
-#  update_config CONFIG_TEST_KMOD n
-#  update_config CONFIG_TEST_LKM n
-#  update_config CONFIG_TEST_MAPLE_TREE n
-#  update_config CONFIG_TEST_MEMCAT_P n
-#  update_config CONFIG_TEST_MEMINIT n
-#  update_config CONFIG_TEST_MIN_HEAP n
-#  update_config CONFIG_TEST_REF_TRACKER n
-#  update_config CONFIG_TEST_RHASHTABLE n
-#  update_config CONFIG_TEST_STATIC_KEYS n
-#  update_config CONFIG_TEST_SYSCTL n
-#  update_config CONFIG_TEST_UBSAN n
-#  update_config CONFIG_TEST_UDELAY n
-#  update_config CONFIG_TEST_UUID n
-#  update_config CONFIG_TEST_XARRAY n
-#  update_config CONFIG_USB4_KUNIT_TEST n
-#  update_config CONFIG_VCAP_KUNIT_TEST n
-#  update_config CONFIG_XZ_DEC_TEST n
+  scripts/config --file .config --disable CONFIG_LOCK_TORTURE_TEST
+  scripts/config --file .config --disable CONFIG_RCU_TORTURE_TEST
+  update_config CONFIG_LOCK_TORTURE_TEST n
+  update_config CONFIG_RCU_TORTURE_TEST n
+  scripts/config --file .config --enable CONFIG_KASAN
+  scripts/config --file .config --enable CONFIG_KASAN_INLINE
+  scripts/config --file .config --disable CONFIG_PROVE_RCU
+  scripts/config --file .config --disable CONFIG_WW_MUTEX_SELFTEST
+  scripts/config --file .config --disable CONFIG_TORTURE_TEST
+  scripts/config --file .config --disable CONFIG_TEST_VMALLOC
+  scripts/config --file .config --disable CONFIG_REED_SOLOMON_TEST
+  scripts/config --file .config --enable CONFIG_ASYNC_RAID6_TEST
+  scripts/config --file .config --disable CONFIG_DMABUF_SELFTESTS
+  scripts/config --file .config --disable CONFIG_FIPS_SIGNATURE_SELFTEST
+  scripts/config --file .config --disable CONFIG_FIPS_SIGNATURE_SELFTEST_RSA
+  scripts/config --file .config --disable CONFIG_FIPS_SIGNATURE_SELFTEST_ECDSA
+  scripts/config --file .config --disable CONFIG_GLOB_SELFTEST
+  scripts/config --file .config --disable CONFIG_DEBUG_LOCKING_API_SELFTESTS
+  scripts/config --file .config --disable CONFIG_SCF_TORTURE_TEST
+  scripts/config --file .config --disable CONFIG_X86_DECODER_SELFTEST
+  scripts/config --file .config --disable CONFIG_BACKTRACE_SELF_TEST
+  scripts/config --file .config --disable CONFIG_KALLSYMS_SELFTEST
+  scripts/config --file .config --disable CONFIG_DEBUG_OBJECTS_SELFTEST
+  scripts/config --file .config --disable CONFIG_BINFMT_ELF_KUNIT_TEST
+  scripts/config --file .config --disable CONFIG_DAMON_KUNIT_TEST
+  scripts/config --file .config --disable CONFIG_DAMON_SYSFS_KUNIT_TEST
+  scripts/config --file .config --disable CONFIG_DAMON_VADDR_KUNIT_TEST
+  # scripts/config --file .config --disable
+  scripts/config --file .config --disable CONFIG_DEBUG_RODATA_TEST
+  scripts/config --file .config --disable CONFIG_DMAPOOL_TEST
+  scripts/config --file .config --disable CONFIG_DRM_SCHED_KUNIT_TEST
+  scripts/config --file .config --disable CONFIG_DRM_VKMS_KUNIT_TEST
+  scripts/config --file .config --disable CONFIG_EFI_TEST #m
+  scripts/config --file .config --disable CONFIG_EXEC_KUNIT_TEST
+  scripts/config --file .config --disable CONFIG_FPGA_KUNIT_TESTS
+  scripts/config --file .config --disable CONFIG_GUP_TEST
+  scripts/config --file .config --disable CONFIG_HW_BREAKPOINT_KUNIT_TEST
+  scripts/config --file .config --disable CONFIG_INITRAMFS_TEST
+  scripts/config --file .config --disable CONFIG_INTERVAL_TREE_TEST
+  scripts/config --file .config --disable CONFIG_KPROBE_EVENT_GEN_TEST
+  scripts/config --file .config --disable CONFIG_LEDS_KUNIT_TEST
+  scripts/config --file .config --disable CONFIG_MAILBOX_TEST
+  scripts/config --file .config --disable CONFIG_MCTP_TEST
+  scripts/config --file .config --disable CONFIG_NITRO_ENCLAVES_MISC_DEV_TEST
+  scripts/config --file .config --disable CONFIG_OF_KUNIT_TEST
+  scripts/config --file .config --disable CONFIG_OF_OVERLAY_KUNIT_TEST
+  scripts/config --file .config --disable CONFIG_OF_UNITTEST
+  scripts/config --file .config --disable CONFIG_PCI_ENDPOINT_TEST
+  scripts/config --file .config --disable CONFIG_PERCPU_TEST
+  scripts/config --file .config --disable CONFIG_PKCS7_TEST_KEY
+  scripts/config --file .config --disable CONFIG_PM_QOS_KUNIT_TEST
+  scripts/config --file .config --disable CONFIG_PREEMPTIRQ_DELAY_TEST
+  scripts/config --file .config --disable CONFIG_RANDSTRUCT_KUNIT_TEST
+  scripts/config --file .config --disable CONFIG_RBTREE_TEST
+  scripts/config --file .config --disable CONFIG_RCU_REF_SCALE_TEST
+  scripts/config --file .config --disable CONFIG_RCU_SCALE_TEST
+  scripts/config --file .config --disable CONFIG_RTC_DRV_TEST
+  scripts/config --file .config --disable CONFIG_SECURITY_APPARMOR_KUNIT_TEST
+  scripts/config --file .config --disable CONFIG_SECURITY_IPE_KUNIT_TEST
+  scripts/config --file .config --disable CONFIG_SECURITY_LANDLOCK_KUNIT_TEST
+  scripts/config --file .config --disable CONFIG_TEST_ASYNC_DRIVER_PROBE
+  scripts/config --file .config --disable CONFIG_TEST_BITMAP
+  scripts/config --file .config --disable CONFIG_TEST_BITOPS
+  scripts/config --file .config --disable CONFIG_TEST_DHRY
+  scripts/config --file .config --disable CONFIG_TEST_DIV64
+  scripts/config --file .config --disable CONFIG_TEST_FIRMWARE
+  scripts/config --file .config --disable CONFIG_TEST_FREE_PAGES
+  scripts/config --file .config --disable CONFIG_TEST_HEXDUMP
+  scripts/config --file .config --disable CONFIG_TEST_HMM #m
+  scripts/config --file .config --disable CONFIG_TEST_IDA
+  scripts/config --file .config --disable CONFIG_TEST_KMOD
+  scripts/config --file .config --disable CONFIG_TEST_LKM
+  scripts/config --file .config --disable CONFIG_TEST_MAPLE_TREE
+  scripts/config --file .config --disable CONFIG_TEST_MEMCAT_P
+  scripts/config --file .config --disable CONFIG_TEST_MEMINIT
+  scripts/config --file .config --disable CONFIG_TEST_MIN_HEAP
+  scripts/config --file .config --disable CONFIG_TEST_REF_TRACKER
+  scripts/config --file .config --disable CONFIG_TEST_RHASHTABLE
+  scripts/config --file .config --disable CONFIG_TEST_STATIC_KEYS
+  scripts/config --file .config --disable CONFIG_TEST_SYSCTL
+  scripts/config --file .config --disable CONFIG_TEST_UBSAN
+  scripts/config --file .config --disable CONFIG_TEST_UDELAY
+  scripts/config --file .config --disable CONFIG_TEST_UUID
+  scripts/config --file .config --disable CONFIG_TEST_XARRAY
+  scripts/config --file .config --disable CONFIG_USB4_KUNIT_TEST
+  scripts/config --file .config --disable CONFIG_VCAP_KUNIT_TEST
+  scripts/config --file .config --disable CONFIG_XZ_DEC_TEST
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  # scripts/config --file .config --disable
+  update_config CONFIG_PROVE_RCU n
+  update_config CONFIG_WW_MUTEX_SELFTEST n
+  update_config CONFIG_TORTURE_TEST n
+  update_config CONFIG_TEST_VMALLOC n
+  update_config CONFIG_REED_SOLOMON_TEST n
+  update_config CONFIG_ASYNC_RAID6_TEST m
+  update_config CONFIG_DMABUF_SELFTESTS n
+  update_config CONFIG_FIPS_SIGNATURE_SELFTEST n
+  update_config CONFIG_FIPS_SIGNATURE_SELFTEST_RSA n
+  update_config CONFIG_FIPS_SIGNATURE_SELFTEST_ECDSA n
+  update_config CONFIG_GLOB_SELFTEST n
+  update_config CONFIG_DEBUG_LOCKING_API_SELFTESTS n
+  update_config CONFIG_SCF_TORTURE_TEST n
+  update_config CONFIG_X86_DECODER_SELFTEST n
+  update_config CONFIG_BACKTRACE_SELF_TEST n
+  update_config CONFIG_KALLSYMS_SELFTEST n
+  update_config CONFIG_DEBUG_OBJECTS_SELFTEST n
+  update_config CONFIG_BINFMT_ELF_KUNIT_TEST n
+  update_config CONFIG_DAMON_KUNIT_TEST n
+  update_config CONFIG_DAMON_SYSFS_KUNIT_TEST n
+  update_config CONFIG_DAMON_VADDR_KUNIT_TEST n
+  # update_config  n
+  update_config CONFIG_DEBUG_RODATA_TEST n
+  update_config CONFIG_DMAPOOL_TEST n
+  update_config CONFIG_DRM_SCHED_KUNIT_TEST n
+  update_config CONFIG_DRM_VKMS_KUNIT_TEST n
+  update_config CONFIG_EFI_TEST m
+  update_config CONFIG_EXEC_KUNIT_TEST n
+  update_config CONFIG_FPGA_KUNIT_TESTS n
+  update_config CONFIG_GUP_TEST n
+  update_config CONFIG_HW_BREAKPOINT_KUNIT_TEST n
+  update_config CONFIG_INITRAMFS_TEST n
+  update_config CONFIG_INTERVAL_TREE_TEST n
+  update_config CONFIG_KPROBE_EVENT_GEN_TEST n
+  update_config CONFIG_LEDS_KUNIT_TEST n
+  update_config CONFIG_MAILBOX_TEST n
+  update_config CONFIG_MCTP_TEST n
+  update_config CONFIG_NITRO_ENCLAVES_MISC_DEV_TEST n
+  update_config CONFIG_OF_KUNIT_TEST n
+  update_config CONFIG_OF_OVERLAY_KUNIT_TEST n
+  update_config CONFIG_OF_UNITTEST n
+  update_config CONFIG_PCI_ENDPOINT_TEST n
+  update_config CONFIG_PERCPU_TEST n
+  update_config CONFIG_PKCS7_TEST_KEY n
+  update_config CONFIG_PM_QOS_KUNIT_TEST n
+  update_config CONFIG_PREEMPTIRQ_DELAY_TEST n
+  update_config CONFIG_RANDSTRUCT_KUNIT_TEST n
+  update_config CONFIG_RBTREE_TEST n
+  update_config CONFIG_RCU_REF_SCALE_TEST n
+  update_config CONFIG_RCU_SCALE_TEST n
+  update_config CONFIG_RTC_DRV_TEST n
+  update_config CONFIG_SECURITY_APPARMOR_KUNIT_TEST n
+  update_config CONFIG_SECURITY_IPE_KUNIT_TEST n
+  update_config CONFIG_SECURITY_LANDLOCK_KUNIT_TEST n
+  update_config CONFIG_TEST_ASYNC_DRIVER_PROBE n
+  update_config CONFIG_TEST_BITMAP n
+  update_config CONFIG_TEST_BITOPS n
+  update_config CONFIG_TEST_DHRY n
+  update_config CONFIG_TEST_DIV64 n
+  update_config CONFIG_TEST_FIRMWARE n
+  update_config CONFIG_TEST_FREE_PAGES n
+  update_config CONFIG_TEST_HEXDUMP n
+  update_config CONFIG_TEST_HMM m
+  update_config CONFIG_TEST_IDA n
+  update_config CONFIG_TEST_KMOD n
+  update_config CONFIG_TEST_LKM n
+  update_config CONFIG_TEST_MAPLE_TREE n
+  update_config CONFIG_TEST_MEMCAT_P n
+  update_config CONFIG_TEST_MEMINIT n
+  update_config CONFIG_TEST_MIN_HEAP n
+  update_config CONFIG_TEST_REF_TRACKER n
+  update_config CONFIG_TEST_RHASHTABLE n
+  update_config CONFIG_TEST_STATIC_KEYS n
+  update_config CONFIG_TEST_SYSCTL n
+  update_config CONFIG_TEST_UBSAN n
+  update_config CONFIG_TEST_UDELAY n
+  update_config CONFIG_TEST_UUID n
+  update_config CONFIG_TEST_XARRAY n
+  update_config CONFIG_USB4_KUNIT_TEST n
+  update_config CONFIG_VCAP_KUNIT_TEST n
+  update_config CONFIG_XZ_DEC_TEST n
 # update_config  n
 # update_config  n
 # update_config  n

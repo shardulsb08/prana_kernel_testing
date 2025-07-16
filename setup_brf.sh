@@ -12,6 +12,10 @@ cmake ../llvm -DLLVM_TARGETS_TO_BUILD="BPF;X86" \
     -DLLVM_BUILD_RUNTIME=OFF
 make
 
+echo "PATH="/build/brf/deps/llvm-project/build/bin:$PATH"" >> ~/.bashrc
+echo "export PATH" >> ~/.bashrc
+
+
 # Pahole
 # git clone --branch v1.24 https://github.com/acmel/dwarves.git
 mkdir dwarves/build; cd dwarves/build
