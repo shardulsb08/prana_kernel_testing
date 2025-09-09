@@ -67,5 +67,17 @@ EOF_SED
 }
 # append_to_dnf_install_bash cmake
 
+# Prepare build input directory and copy test configuration files
+mkdir -p "$(pwd)/container_kernel_workspace"
+mkdir -p "$(pwd)/build_input"
+cp host_drive/tests/test_config.txt "$(pwd)/build_input/"
+cp host_drive/tests/syzkaller/*.config "$(pwd)/build_input/"
+cp host_drive/tests/bpf_runtime_fuzzer/*.config "$(pwd)/build_input/"
+
 docker build -t kernel-builder-fedora-brf-test-dnf-append .
-docker run -it -v "$(pwd)/container_kernel_workspace":/build -v "$(pwd)":/prana_kernel_testing --name kernel-builder-fedora-container-brf-test-dnf-append kernel-builder-fedora-brf-test-dnf-append /bin/bash
+docker run -it -v \
+	"$(pwd)/container_kernel_workspace":/build	\
+	-v "$(pwd)":/prana_kernel_testing		\
+	-v "$(pwd)/build_input":/build_input		\
+	-v /etc/localtime:/etc/localtime:ro		\
+	--name kernel-builder-fedora-container-brf-test-dnf-append kernel-builder-fedora-brf-test-dnf-append /bin/bash

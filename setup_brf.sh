@@ -17,8 +17,12 @@ echo "export PATH" >> ~/.bashrc
 
 
 # Pahole
+# sudo dnf -y install elfutils-devel elfutils-libs elfutils-libelf
 # git clone --branch v1.24 https://github.com/acmel/dwarves.git
 mkdir dwarves/build; cd dwarves/build
 cmake ../
 make
 sudo make install
+
+libbpf:
+git clone https://github.com/libbpf/libbpf.git
