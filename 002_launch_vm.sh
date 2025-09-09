@@ -112,7 +112,7 @@ esac
 # ========= Configuration Variables =========
 VM_NAME="fedora-vm"
 DISK_IMAGE="$SCRIPT_DIR/fedora_vm.qcow2"
-CLOUD_IMAGE="$SCRIPT_DIR/Fedora-Cloud-Base-38-1.6.x86_64.qcow2"
+CLOUD_IMAGE="$SCRIPT_DIR/Fedora-Cloud-Base-Generic-42-1.1.x86_64.qcow2"
 
 echo "Fetching latest Fedora release version"
 # Fetch the latest Fedora release version
@@ -160,8 +160,8 @@ fi
 PUBLIC_KEY=$(cat "$SYZKALLER_SSH_KEY.pub")
 
 # VM resources
-RAM_MB=20480  # 20GB RAM
-VCPUS=16      # 16 vCPUs
+RAM_MB=12288  # 12GB RAM
+VCPUS=12      # 12 vCPUs
 DISK_SIZE="35G"  # Disk image size
 
 # ========= Helper Functions =========
@@ -234,6 +234,14 @@ users:
 ssh_pwauth: True
 packages:
   - stress-ng
+  - make
+  - sysbench
+  - git
+  - vim
+  - tmux
+  - usbutils
+  - tcpdump
+  - clang-20
 runcmd:
   - mkdir -p /root/.ssh
   - cp "/home/${SSH_USER}/.ssh/authorized_keys" /root/.ssh/authorized_keys
@@ -282,8 +290,14 @@ SSH_HOST="$SSH_HOST"
 VM_NET_CONFIG="$VM_HOSTFWD"
 
 # Update QEMU network configuration
-QEMU_OPTS="-netdev user,id=user.0,hostfwd=${VM_NET_CONFIG} \
-           -device virtio-net-pci,netdev=user.0"
+# QEMU_OPTS="-netdev user,id=user.0,hostfwd=${VM_NET_CONFIG} \
+# 	   -net user,host=10.0.2.10,hostfwd=tcp:127.0.0.1:10021-:22 \
+# 	   -net nic,model=e1000 \
+#            -device virtio-net-pci,netdev=user.0"
+
+QEMU_OPTS="-netdev user,id=user.0,hostfwd=${VM_NET_CONFIG}"
+
+QEMU_OPTS+=" -device virtio-net-pci,netdev=user.0"
 
 VM_LOGS="vm_$(date +"%Y_%m_%d_%H%M%S").log"
 qemu-system-x86_64 \
@@ -297,6 +311,8 @@ qemu-system-x86_64 \
     -device virtio-9p-pci,fsdev=host_out,mount_tag=host_out \
     -fsdev local,id=host_drive,path="${TEST_DIR}/..",security_model=passthrough \
     -device virtio-9p-pci,fsdev=host_drive,mount_tag=host_drive \
+    -virtfs local,path=${OUT_DIR}/../tmp/net-next,mount_tag=host0,security_model=mapped,id=host0 \
+    -pidfile vm.pid \
     -nographic \
     $QEMU_OPTS \
     2>&1 | tee "$VM_LOGS" &
@@ -381,7 +397,31 @@ if [ ! -f "/host_out/out/dummy-kernel-headers.spec" ]; then
 fi
 
 log "Updating kernel headers spec file version..."
-sed -i "s/^Version:.*/Version:        $KVER/" /host_out/out/dummy-kernel-headers.spec || { log "Failed to update spec file version"; exit 1; }
+# Extract the base version and the release candidate/suffix
+# Example: KVER="6.16.0-rc5" -> BASE_KVER="6.16.0", RC_SUFFIX="rc5"
+BASE_KVER=$(echo "$KVER" | sed 's/-.*//')
+RC_SUFFIX=$(echo "$KVER" | sed -n 's/.*-\(.*\)/\1/p')
+
+# If there's an RC_SUFFIX, prepend it with a tilde '~' for RPM compatibility
+# This ensures that rpmbuild accepts it in the Release field and handles versioning correctly.
+# For example, 6.16.0-rc5 becomes Version: 6.16.0, Release: ~rc5.1
+if [ -n "$RC_SUFFIX" ]; then
+    RPM_RELEASE_SUFFIX="~${RC_SUFFIX}.1" # Appending .1 for initial build number
+else
+    RPM_RELEASE_SUFFIX="1" # Default release number if no RC_SUFFIX
+fi
+
+sed -i "s/^Version:.*/Version:        $BASE_KVER/" /host_out/out/dummy-kernel-headers.spec || { log "Failed to update spec file version"; exit 1; }
+# Update the Release field in the spec file
+# Assuming your spec file has a Release: field, if not, you'll need to add it.
+sed -i "/^Release:/cRelease:        ${RPM_RELEASE_SUFFIX}%{?dist}" /host_out/out/dummy-kernel-headers.spec || { log "Failed to update spec file release"; exit 1; }
+
+# The package name substitution already looks for numbers and dot, so it should be fine
+# if your dummy-kernel-headers.spec already has 'dummy-kernel-headers-%{version}-%'
+# but for safety, let's ensure it's robust.
+# The original sed command here is still good if you want the package name to reflect the full KVER.
+# If you want the package name to only reflect the base version, adjust this.
+# For this fix, we'll keep it as is, assuming the package name can contain hyphens.
 sed -i "s/dummy-kernel-headers-[0-9.]*-/dummy-kernel-headers-$KVER-/" /host_out/out/dummy-kernel-headers.spec || { log "Failed to update spec file package name"; exit 1; }
 
 log "Retrieving UUID of the root filesystem..."
@@ -444,7 +484,11 @@ cp /host_out/out/dummy-kernel-headers.spec ~/rpmbuild/SPECS/
 
 # Build and install the dummy package to prevent conflicts
 rpmbuild -ba ~/rpmbuild/SPECS/dummy-kernel-headers.spec
-sudo dnf install -y ~/rpmbuild/RPMS/noarch/dummy-kernel-headers-${KVER}-1*.noarch.rpm
+
+# Install the dummy package using the dynamically generated RPM filename
+# We need to account for the '~' and the '.1' added by the RPM build process
+# The 'f' in fc42 also needs to be accounted for.
+sudo dnf install -y ~/rpmbuild/RPMS/noarch/dummy-kernel-headers-${BASE_KVER}-${RPM_RELEASE_SUFFIX}.*.noarch.rpm || { log "Failed to install dummy kernel headers RPM"; exit 1; }
 
 # Verify header installation
 log "Verifying kernel header installation..."
