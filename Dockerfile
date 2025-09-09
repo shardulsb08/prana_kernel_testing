@@ -32,6 +32,17 @@ RUN dnf -y update && \
 	cmake && \
     dnf clean all
 
+# For BPF support
+RUN dnf -y update && \
+    dnf -y install \
+        libcap-devel \
+        clang \
+        llvm \
+        graphviz \
+        glibc-static \
+	dwarves && \
+    dnf clean all
+
 WORKDIR /build
 
 # Create infrastructure directory structure

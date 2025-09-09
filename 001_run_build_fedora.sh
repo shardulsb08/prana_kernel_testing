@@ -85,4 +85,9 @@ cp host_drive/tests/bpf_runtime_fuzzer/*.config "$(pwd)/build_input/"
 
 # Build the Docker image and run the container
 docker build -t kernel-builder-fedora .
-docker run -it -v "$(pwd)/container_kernel_workspace":/build -v "$(pwd)/build_input":/build_input --name kernel-builder-fedora-container kernel-builder-fedora
+docker run -it \
+	-v "$(pwd)/container_kernel_workspace":/build \
+	-v "$(pwd)/build_input":/build_input \
+	-v /etc/localtime:/etc/localtime:ro \
+	--name kernel-builder-fedora-container \
+	kernel-builder-fedora
